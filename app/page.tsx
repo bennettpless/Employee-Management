@@ -11,7 +11,7 @@ export default function Home() {
             Employee Management System
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Unified employee management integrated with Azure Entra ID and NinjaOne.
+            Unified employee management with SharePoint Excel and NinjaOne.
             Keep track of employees, devices, software, and licenses all in one place.
           </p>
         </div>
@@ -83,7 +83,7 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-gray-900 ml-4">Sync Status</h2>
               </div>
               <p className="text-gray-600">
-                Monitor data synchronization from Azure Entra ID and NinjaOne. Manually trigger syncs when needed.
+                Monitor data synchronization from SharePoint Excel and NinjaOne. Trigger sync from Excel when needed.
               </p>
             </div>
           </Link>
@@ -112,8 +112,8 @@ export default function Home() {
                 <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
               </div>
               <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Azure Entra ID Integration</h4>
-                <p className="text-gray-600 text-sm">Automatic sync of employee data from your golden source</p>
+                <h4 className="font-semibold text-gray-900 mb-1">SharePoint Excel Integration</h4>
+                <p className="text-gray-600 text-sm">Sync employee and device roster from your Excel inventory</p>
               </div>
             </div>
             <div className="flex items-start">

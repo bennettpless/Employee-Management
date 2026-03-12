@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Key, Loader2 } from 'lucide-react'
-import { License } from '@/lib/types'
-import { format } from 'date-fns'
+import { ArrowLeft, Key, Loader2, Users } from 'lucide-react'
+
+interface License {
+  software_name: string
+  user_count: number
+}
 
 export default function LicensesPage() {
   const [licenses, setLicenses] = useState<License[]>([])
@@ -27,14 +30,6 @@ export default function LicensesPage() {
     }
   }
 
-  const getUsageColor = (used: number, total: number) => {
-    if (!total) return 'bg-gray-200'
-    const percentage = (used / total) * 100
-    if (percentage >= 90) return 'bg-red-500'
-    if (percentage >= 75) return 'bg-yellow-500'
-    return 'bg-green-500'
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <div className="container mx-auto px-4 py-8">
@@ -47,85 +42,66 @@ export default function LicensesPage() {
             Back to Home
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Software Licenses</h1>
-          <p className="text-gray-600">Manage software licenses and track usage</p>
+          <p className="text-gray-600">View all licenses and user assignments</p>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
           </div>
+        ) : licenses.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <Key className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 text-lg">No licenses found in the database</p>
+          </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {licenses.map((license) => (
-              <div key={license.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center">
-                    <div className="bg-orange-100 rounded-lg p-3 mr-3">
-                      <Key className="w-6 h-6 text-orange-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{license.software_name}</h3>
-                      <p className="text-sm text-gray-600">{license.license_type}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {license.vendor && (
-                  <p className="text-sm text-gray-600 mb-3">Vendor: {license.vendor}</p>
-                )}
-
-                {/* Seat Usage */}
-                {license.total_seats && (
-                  <div className="mb-4">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Seat Usage</span>
-                      <span className="font-medium text-gray-900">
-                        {license.used_seats} / {license.total_seats}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all ${getUsageColor(license.used_seats, license.total_seats)}`}
-                        style={{
-                          width: `${Math.min((license.used_seats / license.total_seats) * 100, 100)}%`
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Details */}
-                <div className="space-y-2 text-sm">
-                  {license.expiration_date && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Expires:</span>
-                      <span className={`font-medium ${
-                        new Date(license.expiration_date) < new Date()
-                          ? 'text-red-600'
-                          : 'text-gray-900'
-                      }`}>
-                        {format(new Date(license.expiration_date), 'MMM d, yyyy')}
-                      </span>
-                    </div>
-                  )}
-                  {license.cost && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Cost:</span>
-                      <span className="font-medium text-gray-900">
-                        ${license.cost.toFixed(2)}
-                        {license.billing_frequency && ` / ${license.billing_frequency}`}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {license.notes && (
-                  <p className="text-xs text-gray-600 mt-4 pt-4 border-t border-gray-200">
-                    {license.notes}
-                  </p>
-                )}
-              </div>
-            ))}
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Software Name
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Users Assigned
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {licenses.map((license, index) => (
+                    <tr 
+                      key={license.software_name} 
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="bg-blue-100 rounded-lg p-2 mr-3">
+                            <Key className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <span className="font-medium text-gray-900">{license.software_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <Users className="w-5 h-5 text-gray-400 mr-2" />
+                          <span className="text-gray-900 font-semibold">{license.user_count}</span>
+                          <span className="text-gray-500 ml-1">
+                            {license.user_count === 1 ? 'user' : 'users'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                Total: <span className="font-semibold text-gray-900">{licenses.length}</span> unique licenses
+              </p>
+            </div>
           </div>
         )}
       </div>

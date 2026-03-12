@@ -115,7 +115,7 @@ CREATE TABLE license_assignments (
 -- Sync logs to track data synchronization
 CREATE TABLE sync_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    sync_type VARCHAR(50) NOT NULL, -- entra_id, ninjaone, tickets
+    sync_type VARCHAR(50) NOT NULL, -- entra_id, ninjaone, tickets, excel
     status VARCHAR(50) NOT NULL, -- success, partial, failed
     records_synced INTEGER DEFAULT 0,
     records_failed INTEGER DEFAULT 0,

@@ -13,6 +13,12 @@ export default function SyncPage() {
 
   useEffect(() => {
     fetchSyncLogs()
+    // Refresh sync logs every 3 seconds to show latest data
+    const interval = setInterval(() => {
+      fetchSyncLogs()
+    }, 3000)
+    
+    return () => clearInterval(interval)
   }, [])
 
   const fetchSyncLogs = async () => {
@@ -63,115 +69,168 @@ export default function SyncPage() {
           <p className="text-gray-600">Monitor and trigger data syncs from external systems</p>
         </div>
 
-        {/* Unified Sync Button */}
+        {/* Excel Sync Button */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Sync All Systems</h3>
-              <p className="text-sm text-gray-600">Sync Azure Entra ID first, then NinjaOne. Any dependencies will be handled automatically.</p>
+              <h3 className="text-lg font-semibold text-gray-900">Sync from SharePoint Excel</h3>
+              <p className="text-sm text-gray-600">Sync employee and device data from the SharePoint Excel file "BP Employee list and inventory.xlsx"</p>
             </div>
           </div>
           <button
             onClick={async () => {
-              if (syncing['all']) return
+              if (syncing['excel'] || syncing['ninjaone']) return
               
-              setSyncing(prev => ({ ...prev, all: true }))
+              setSyncing(prev => ({ ...prev, excel: true, ninjaone: true }))
               
               try {
-                // Start the sync (returns immediately with sync ID)
-                const startResponse = await fetch('/api/sync/all', { method: 'POST' })
+                // Start Excel sync
+                const response = await fetch('/api/sync/excel', { method: 'POST' })
+                const result = await response.json()
                 
-                if (!startResponse.ok) {
-                  const error = await startResponse.json().catch(() => ({ error: 'Unknown error' }))
-                  throw new Error(error.error || 'Failed to start sync')
+                if (!response.ok) {
+                  throw new Error(result.error || 'Failed to sync Excel data')
                 }
                 
-                const startResult = await startResponse.json()
-                const syncId = startResult.syncId
+                // Excel sync completed, now wait for Ninja sync
+                console.log('Excel sync completed, waiting for Ninja sync...')
                 
-                if (!syncId) {
-                  throw new Error('No sync ID returned')
-                }
+                // Show alert first (non-blocking by using setTimeout)
+                const message = `Excel sync completed!\n\n` +
+                  `Synced: ${result.recordsSynced || 0} records\n` +
+                  `Failed: ${result.recordsFailed || 0} records\n` +
+                  (result.duration ? `Duration: ${result.duration}s\n` : '') +
+                  (result.errors && result.errors.length > 0 ? `\nErrors:\n${result.errors.slice(0, 5).join('\n')}` : '') +
+                  `\n\nNinja sync is running in the background to populate device details...`
                 
-                console.log(`Started sync with ID: ${syncId}`)
+                // Show alert asynchronously so it doesn't block polling
+                setTimeout(() => alert(message), 100)
                 
-                // Poll for sync status until complete
+                // Poll for Ninja sync completion
                 const pollInterval = 3000 // Poll every 3 seconds
-                const maxAttempts = 2400 // Maximum 2 hours (2400 * 3 seconds)
+                const maxAttempts = 200 // Maximum 10 minutes (200 * 3 seconds)
                 let attempts = 0
+                let pollingStopped = false
+                const excelSyncStartTime = Date.now()
                 
-                const pollStatus = async (): Promise<any> => {
+                const checkNinjaSync = async (): Promise<void> => {
+                  // Stop if polling was already stopped
+                  if (pollingStopped) {
+                    console.log('Polling already stopped, exiting')
+                    return
+                  }
+                  
                   attempts++
                   
                   if (attempts > maxAttempts) {
-                    throw new Error('Sync is taking longer than expected. Please check the sync history below.')
+                    console.warn('Ninja sync is taking longer than expected - stopping polling')
+                    pollingStopped = true
+                    setSyncing(prev => ({ ...prev, ninjaone: false }))
+                    return
                   }
                   
-                  try {
-                    const statusResponse = await fetch(`/api/sync/status/${syncId}?t=${Date.now()}`, {
-                      cache: 'no-store'
-                    })
+                  // Fetch latest logs
+                  const logs = await fetchSyncLogs()
+                  
+                  // Find the most recent NinjaOne sync log
+                  const allNinjaLogs = logs
+                    .filter(log => log.sync_type === 'ninjaone')
+                    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+                  
+                  console.log(`[Poll ${attempts}] Found ${allNinjaLogs.length} NinjaOne logs. All sync types:`, logs.map(l => `${l.sync_type} (${l.started_at})`))
+                  
+                  if (allNinjaLogs.length > 0) {
+                    const latestNinjaLog = allNinjaLogs[0] // Most recent
                     
-                    if (!statusResponse.ok) {
-                      // If status endpoint fails, wait and retry (might be transient)
-                      await new Promise(resolve => setTimeout(resolve, pollInterval))
-                      return pollStatus()
+                    // Check if this is a new sync (started after Excel sync or very recent)
+                    const logStartedTime = new Date(latestNinjaLog.started_at).getTime()
+                    const isRecentSync = logStartedTime >= excelSyncStartTime - 30000 || // 30 seconds before Excel sync
+                                        logStartedTime >= Date.now() - (5 * 60 * 1000) // Or within last 5 minutes
+                    
+                    if (!isRecentSync && attempts < 10) {
+                      // If it's not a recent sync and we haven't tried many times, wait for the new log to appear
+                      console.log(`⏳ Most recent NinjaOne log is old (${latestNinjaLog.started_at}), waiting for new sync to appear... (attempt ${attempts})`)
+                    } else {
+                      // Check this log
+                      const completedAt = latestNinjaLog.completed_at
+                      const status = latestNinjaLog.status
+                      
+                      console.log(`[Poll ${attempts}] Checking Ninja sync log:`, {
+                        id: latestNinjaLog.id,
+                        started: latestNinjaLog.started_at,
+                        completed: completedAt,
+                        status: status,
+                        isRecent: isRecentSync,
+                        completedAtType: typeof completedAt,
+                        completedAtValue: completedAt,
+                        isNull: completedAt === null,
+                        isEmpty: completedAt === '',
+                        hasCompletedAt: !!completedAt && completedAt !== null && completedAt !== ''
+                      })
+                    
+                      // If sync is completed, we're done
+                      const isCompleted = completedAt && 
+                                         completedAt !== null && 
+                                         completedAt !== '' &&
+                                         String(completedAt).trim() !== ''
+                      
+                      if (isCompleted) {
+                        console.log('✅ Ninja sync completed - stopping polling')
+                        pollingStopped = true
+                        setSyncing(prev => {
+                          console.log('Setting ninjaone to false, previous state:', prev)
+                          const newState = { ...prev, ninjaone: false }
+                          console.log('New state:', newState)
+                          return newState
+                        })
+                        await fetchSyncLogs() // Final refresh
+                        return
                     }
                     
-                    const status = await statusResponse.json()
-                    
-                    console.log(`[Poll] Sync ${syncId} status: ${status.status}, isComplete: ${status.isComplete}, completedAt: ${status.completedAt || 'null'}`)
-                    
-                    // Check if sync is complete - use both isComplete flag and completedAt
-                    if (status.isComplete || status.completedAt) {
-                      console.log(`[Poll] ✅ Sync ${syncId} is complete! Status: ${status.status}, Synced: ${status.recordsSynced}, Failed: ${status.recordsFailed}`)
-                      return status
+                      // If sync is in progress, continue polling
+                      console.log(`⏳ Ninja sync in progress (started at ${latestNinjaLog.started_at}, status: ${status}, completed_at: ${completedAt || 'not set'})`)
                     }
-                    
-                    // Continue polling - sync is still in progress
-                    await new Promise(resolve => setTimeout(resolve, pollInterval))
-                    return pollStatus()
-                  } catch (fetchError) {
-                    // Network error - wait and retry
-                    console.warn('Error polling status, retrying...', fetchError)
-                    await new Promise(resolve => setTimeout(resolve, pollInterval))
-                    return pollStatus()
+                  } else {
+                    // No Ninja sync log found yet - it might not have started
+                    console.log(`⏳ Waiting for Ninja sync to start... (attempt ${attempts}/${maxAttempts})`)
+                    console.log(`Available logs: ${logs.map(l => `${l.sync_type} (${l.started_at})`).join(', ')}`)
                   }
+                  
+                  // Continue polling
+                    await new Promise(resolve => setTimeout(resolve, pollInterval))
+                  return checkNinjaSync()
                 }
                 
-                // Wait for sync to complete
-                const finalStatus = await pollStatus()
-                
-                const message = `Sync completed!\n\n` +
-                  `Status: ${finalStatus.status}\n` +
-                  `Synced: ${finalStatus.recordsSynced || 0} records\n` +
-                  `Failed: ${finalStatus.recordsFailed || 0} records\n` +
-                  (finalStatus.duration ? `Duration: ${finalStatus.duration}s\n` : '') +
-                  (finalStatus.errorMessage ? `\nError: ${finalStatus.errorMessage}` : '')
-                
-                alert(message)
+                // Start polling for Ninja sync immediately (don't await, let it run in background)
+                checkNinjaSync().catch(err => {
+                  console.error('Error polling Ninja sync:', err)
+                  pollingStopped = true
+                  setSyncing(prev => ({ ...prev, ninjaone: false }))
+                })
                 
               } catch (error: any) {
-                console.error('Error syncing all:', error)
-                alert(`Sync failed: ${error.message || error}\n\nPlease check the sync history below for details.`)
+                console.error('Error syncing Excel:', error)
+                alert(`Excel sync failed: ${error.message || error}\n\nPlease check the sync history below for details.`)
+                setSyncing(prev => ({ ...prev, excel: false, ninjaone: false }))
               } finally {
-                setSyncing(prev => ({ ...prev, all: false }))
-                // Refresh logs to show latest status
+                setSyncing(prev => ({ ...prev, excel: false }))
+                // Refresh logs immediately and then again after a short delay
                 await fetchSyncLogs()
+                setTimeout(() => fetchSyncLogs(), 2000) // Refresh again after 2 seconds
               }
             }}
-            disabled={syncing['all']}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors font-medium text-lg"
+            disabled={syncing['excel'] || syncing['ninjaone']}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors font-medium text-lg"
           >
-            {syncing['all'] ? (
+            {syncing['excel'] || syncing['ninjaone'] ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Syncing All Systems...
+                {syncing['excel'] ? 'Syncing from Excel...' : 'Syncing devices from NinjaOne...'}
               </>
             ) : (
               <>
                 <RefreshCw className="w-5 h-5" />
-                Sync All Systems
+                Sync from Excel
               </>
             )}
           </button>
@@ -189,7 +248,7 @@ export default function SyncPage() {
             <p className="text-center text-gray-600 py-12">No sync history available</p>
           ) : (
             <div className="space-y-3">
-              {syncLogs.map((log) => (
+              {syncLogs.slice(0, 10).map((log) => (
                 <div key={log.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start flex-1">

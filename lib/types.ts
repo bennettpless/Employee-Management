@@ -11,7 +11,7 @@ export interface Employee {
   phone_number: string | null
   mobile_phone: string | null
   manager_entra_id: string | null
-  manager_name: string | null
+  dpt_manager: string | null
   employment_status: 'active' | 'terminated' | 'on_leave'
   hire_date: string | null
   termination_date: string | null
@@ -81,7 +81,7 @@ export interface LicenseAssignment {
 
 export interface SyncLog {
   id: string
-  sync_type: 'entra_id' | 'ninjaone'
+  sync_type: 'entra_id' | 'ninjaone' | 'excel'
   status: 'success' | 'partial' | 'failed'
   records_synced: number
   records_failed: number

@@ -1,19 +1,19 @@
 # Employee Management System
 
-A comprehensive employee management system that integrates with Azure Entra ID, NinjaOne, and Supabase to provide a unified view of employees, devices, tickets, and software licenses.
+A comprehensive employee management system that integrates with **SharePoint Excel**, NinjaOne, and Supabase to provide a unified view of employees, devices, tickets, and software licenses.
 
 ## 🌟 Features
 
 ### Core Functionality
-- **Employee Management**: Centralized employee directory synced from Azure Entra ID
+- **Employee Management**: Centralized employee directory synced from **SharePoint Excel** ("BP Employee list and inventory.xlsx")
 - **Advanced Filtering**: Filter employees by status, department, and office location
-- **Device Tracking**: View all devices from NinjaOne with software inventory
+- **Device Tracking**: Device roster from Excel; device details (serial, OS, software) from NinjaOne
 - **Ticket Management**: Track support tickets linked to employees
-- **License Management**: Monitor software licenses, usage, and expiration dates
-- **Automated Sync**: Scheduled synchronization from external systems
+- **License Management**: Monitor software licenses, usage, and expiration dates (including data from Excel)
+- **Automated Sync**: Sync from Excel (manual or cron); NinjaOne sync runs after Excel or on schedule
 
 ### Key Capabilities
-- ✅ Real-time sync with Azure Entra ID (employee data)
+- ✅ **SharePoint Excel** sync for employee and device roster (primary data source)
 - ✅ NinjaOne integration for device and software tracking
 - ✅ Multi-dimensional filtering (department, office location, employment status)
 - ✅ Automatic status updates for new hires and terminations
@@ -27,7 +27,7 @@ A comprehensive employee management system that integrates with Azure Entra ID, 
 - **Styling**: Tailwind CSS
 - **Database**: Supabase (PostgreSQL)
 - **Integrations**: 
-  - Microsoft Graph API (Azure Entra ID)
+  - Microsoft Graph API (Azure Entra ID + SharePoint/Excel)
   - NinjaOne API
 - **Deployment**: Vercel (with cron jobs)
 
@@ -39,13 +39,17 @@ Before setting up this project, you'll need:
    - Create a project at [supabase.com](https://supabase.com)
    - Note your project URL and anon key
 
-2. **Azure App Registration**
+2. **Azure App Registration** (for SharePoint/Excel)
    - Access to Azure Portal with admin rights
-   - Create an App Registration with Microsoft Graph API permissions
+   - Create an App Registration with Microsoft Graph API permissions for SharePoint/OneDrive
 
 3. **NinjaOne Account**
    - API credentials (Client ID and Secret)
    - Know your region (US, EU, OC, or CA)
+
+4. **SharePoint Excel (if using Excel as data source)**
+   - A SharePoint-hosted Excel file named **"BP Employee list and inventory.xlsx"** with employee and device columns
+   - Microsoft Graph API permissions for SharePoint/OneDrive (see `EXCEL_MIGRATION_SUMMARY.md` and `SHAREPOINT_SETUP.md` if present)
 
 ## 🚀 Getting Started
 
@@ -119,11 +123,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
 
-# Azure Entra ID (Microsoft Graph API)
+# Microsoft Graph (for SharePoint Excel)
 AZURE_CLIENT_ID=your-azure-app-client-id
 AZURE_CLIENT_SECRET=your-azure-client-secret
 AZURE_TENANT_ID=your-azure-tenant-id
-AZURE_REDIRECT_URI=http://localhost:3000/api/auth/callback
 
 # NinjaOne API
 NINJA_CLIENT_ID=your-ninja-client-id
@@ -150,19 +153,17 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 7. Initial Data Sync
 
-1. Navigate to the **Sync** page in the application
-2. Click "Sync Now" for Azure Entra ID
-3. Wait for completion
-4. Click "Sync Now" for NinjaOne
-5. Wait for completion
-6. Check the **Employees** page to see synced data
+1. Navigate to the **Sync** page in the application  
+2. Click **Sync from Excel** to sync employee and device data from the SharePoint file "BP Employee list and inventory.xlsx"  
+3. Wait for completion; NinjaOne sync may run afterward to populate device details  
+4. Check the **Employees** page to see synced data
 
 ## 📊 Database Schema
 
 ### Tables
 
-- **employees**: Employee data from Azure Entra ID
-- **devices**: Devices from NinjaOne
+- **employees**: Employee data from SharePoint Excel
+- **devices**: Device roster from Excel; details from NinjaOne
 - **device_software**: Software installed on devices
 - **tickets**: Support tickets linked to employees
 - **licenses**: Software licenses
@@ -175,22 +176,14 @@ See `supabase/schema.sql` for complete schema details.
 
 ### Using Vercel Cron Jobs (Recommended)
 
-The `vercel.json` file configures automatic syncs:
-- **Azure Entra ID**: Daily at 2:00 AM
-- **NinjaOne**: Daily at 3:00 AM
-
-Deploy to Vercel and cron jobs will run automatically.
+The `vercel.json` file can run **NinjaOne** sync on a schedule (e.g. daily at 3:00 AM). Excel sync is typically triggered manually from the Sync page. Deploy to Vercel and cron jobs will run automatically.
 
 ### Using Custom Cron Jobs
 
 If not using Vercel, set up cron jobs on your server:
 
 ```bash
-# Azure Entra ID sync (daily at 2 AM)
-0 2 * * * curl -X POST https://your-domain.com/api/sync/entra-id \
-  -H "Authorization: Bearer YOUR_SYNC_CRON_SECRET"
-
-# NinjaOne sync (daily at 3 AM)
+# NinjaOne sync (e.g. daily at 3 AM)
 0 3 * * * curl -X POST https://your-domain.com/api/sync/ninjaone \
   -H "Authorization: Bearer YOUR_SYNC_CRON_SECRET"
 ```
@@ -229,7 +222,7 @@ Overview of all modules with quick access cards
 - View costs and billing frequency
 
 ### Sync (`/sync`)
-- Manual sync triggers
+- **Sync from Excel**: Pull employee and device roster from the SharePoint Excel file
 - View sync history and status
 - Monitor sync success/failures
 
@@ -266,7 +259,6 @@ git push -u origin main
 
 3. **Configure Production URLs**:
    - Update `NEXT_PUBLIC_APP_URL` in Vercel environment variables
-   - Update `AZURE_REDIRECT_URI` if using auth callbacks
 
 4. **Verify Cron Jobs**:
    - Go to Vercel project settings
@@ -285,7 +277,7 @@ ALTER TABLE employees ADD COLUMN custom_field VARCHAR(255);
 ```
 
 2. Update TypeScript types in `lib/types.ts`
-3. Update sync logic in `app/api/sync/entra-id/route.ts`
+3. Update sync logic in `app/api/sync/excel/route.ts` and `lib/excel-mapper.ts`
 4. Update UI components as needed
 
 ### Custom Integrations
@@ -301,11 +293,10 @@ To add new integrations:
 
 ### Sync Failures
 
-**Azure Entra ID sync fails**:
-- Verify Azure App Registration permissions
-- Check admin consent is granted
-- Validate tenant ID and credentials
-- Check sync logs for detailed errors
+**Excel sync fails**:
+- Verify Azure App Registration has SharePoint/OneDrive permissions
+- Check the Excel file name and location (e.g. "BP Employee list and inventory.xlsx")
+- See `EXCEL_MIGRATION_SUMMARY.md` and `SHAREPOINT_SETUP.md` for setup
 
 **NinjaOne sync fails**:
 - Verify API credentials
@@ -347,6 +338,16 @@ Potential features to add:
 - [ ] Integration with more ticket systems
 - [ ] Mobile app
 - [ ] Audit logs for all changes
+
+## 📎 Optional: Azure Entra ID
+
+The app does **not** sync employees or devices from Azure Entra ID by default. Data comes from **SharePoint Excel** and **NinjaOne**. If you later want to add Entra ID as an additional source (e.g. for directory sync), you would need to:
+
+- Re-add an API route (e.g. `app/api/sync/entra-id/route.ts`) that uses Microsoft Graph to read users and registered devices
+- Add permissions such as `User.Read.All`, `Directory.Read.All` to your Azure App Registration
+- Optionally add a "Sync from Entra ID" button or cron job
+
+The database still has `entra_id` and `manager_entra_id` columns on `employees` (Excel sync sets `entra_id` to the employee email for compatibility).
 
 ---
 

@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+// Use system font to avoid startup hang from next/font/google fetch
+const fontClass = 'font-sans'
 
 export const metadata: Metadata = {
   title: 'Employee Management System',
-  description: 'Integrated employee management with Azure Entra ID, NinjaOne, and more',
+  description: 'Employee management with SharePoint Excel, NinjaOne, and Supabase',
 }
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={fontClass}>{children}</body>
     </html>
   )
 }

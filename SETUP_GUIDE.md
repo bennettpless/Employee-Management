@@ -6,12 +6,13 @@ This guide walks you through every step of setting up the Employee Management Sy
 1. [Prerequisites](#prerequisites)
 2. [Initial Setup](#initial-setup)
 3. [Supabase Configuration](#supabase-configuration)
-4. [Azure Entra ID Setup](#azure-entra-id-setup)
+4. [Microsoft Azure / SharePoint Setup](#microsoft-azure--sharepoint-setup)
 5. [NinjaOne Setup](#ninjaone-setup)
 6. [Application Configuration](#application-configuration)
 7. [First Data Sync](#first-data-sync)
 8. [Production Deployment](#production-deployment)
 9. [Troubleshooting](#troubleshooting)
+10. [Optional: Azure Entra ID](#optional-azure-entra-id)
 
 ## Prerequisites
 
@@ -86,68 +87,44 @@ If the dev server starts without errors, you're ready to proceed.
    - license_assignments
    - sync_logs
 
-## Azure Entra ID Setup
+## Microsoft Azure / SharePoint Setup
+
+The app reads the employee and device roster from a **SharePoint-hosted Excel file** ("BP Employee list and inventory.xlsx") using Microsoft Graph. You need an Azure App Registration with permissions to access that file.
 
 ### Step 1: Create App Registration
 
 1. Sign in to [Azure Portal](https://portal.azure.com)
-2. Navigate to **Azure Active Directory**
+2. Navigate to **Microsoft Entra ID** (or Azure Active Directory)
 3. Click **App registrations** in left sidebar
 4. Click **New registration**
 5. Fill in:
    - **Name**: Employee Management System
-   - **Supported account types**: 
-     - Select "Accounts in this organizational directory only"
+   - **Supported account types**: Accounts in this organizational directory only
    - **Redirect URI**: Leave blank for now
 6. Click **Register**
 
 ### Step 2: Copy Application IDs
 
-After registration, you'll see the Overview page:
-
-1. Copy **Application (client) ID**
-   - Example: `a1b2c3d4-e5f6-7890-abcd-ef1234567890`
-   
-2. Copy **Directory (tenant) ID**
-   - Example: `12345678-90ab-cdef-1234-567890abcdef`
-
-Save these values - you'll need them later.
+After registration, copy **Application (client) ID** and **Directory (tenant) ID** from the Overview page. Save them for your `.env` file.
 
 ### Step 3: Create Client Secret
 
 1. In left sidebar, click **Certificates & secrets**
 2. Click **New client secret**
-3. Fill in:
-   - **Description**: Employee Management System
-   - **Expires**: Choose 24 months (or your preference)
-4. Click **Add**
-5. **IMMEDIATELY COPY THE VALUE** (you can't see it again!)
-   - Example: `abc123~DEF456.GHI789_jkl012-mno345`
+3. Add a description and expiration, then click **Add**
+4. **IMMEDIATELY COPY THE VALUE** (you can't see it again!)
 
-### Step 4: Configure API Permissions
+### Step 4: Configure API Permissions (SharePoint/Excel)
 
 1. In left sidebar, click **API permissions**
-2. Click **Add a permission**
-3. Choose **Microsoft Graph**
-4. Choose **Application permissions** (not Delegated)
-5. Search and add these permissions:
-   - `User.Read.All`
-   - `Directory.Read.All`
-   - `Organization.Read.All`
-6. Click **Add permissions**
-7. **IMPORTANT**: Click **Grant admin consent for [your organization]**
-8. Click **Yes** to confirm
-9. Verify all permissions show "Granted" status
+2. Click **Add a permission** > **Microsoft Graph** > **Application permissions**
+3. Add permissions needed to read the Excel file from SharePoint, for example:
+   - `Sites.Read.All` (if the file is in a SharePoint site)
+   - or `Files.Read.All` (if using OneDrive/SharePoint file access)
+4. Click **Grant admin consent for [your organization]**
+5. Verify all permissions show "Granted"
 
-### Step 5: Verify Permissions
-
-Your permissions should look like this:
-
-| API/Permission Name | Type | Status |
-|-------------------|------|--------|
-| Microsoft Graph - User.Read.All | Application | ✅ Granted |
-| Microsoft Graph - Directory.Read.All | Application | ✅ Granted |
-| Microsoft Graph - Organization.Read.All | Application | ✅ Granted |
+For exact column mapping and file location, see **SHAREPOINT_SETUP.md** and **EXCEL_MIGRATION_SUMMARY.md** in the project.
 
 ## NinjaOne Setup
 
@@ -224,11 +201,10 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
-# Azure Entra ID
+# Microsoft Graph (SharePoint/Excel)
 AZURE_CLIENT_ID=
 AZURE_CLIENT_SECRET=
 AZURE_TENANT_ID=
-AZURE_REDIRECT_URI=http://localhost:3000/api/auth/callback
 
 # NinjaOne API
 NINJA_CLIENT_ID=
@@ -250,9 +226,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-### Step 3: Fill in Azure Values
+### Step 3: Fill in Azure Values (for SharePoint/Excel)
 
-From Step "Azure Entra ID Setup":
+From Step "Microsoft Azure / SharePoint Setup":
 
 ```bash
 AZURE_CLIENT_ID=a1b2c3d4-e5f6-7890-abcd-ef1234567890
@@ -294,11 +270,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://yourproject.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# Azure Entra ID
+# Microsoft Graph (SharePoint/Excel)
 AZURE_CLIENT_ID=a1b2c3d4-e5f6-7890-abcd-ef1234567890
 AZURE_CLIENT_SECRET=abc123~DEF456.GHI789_jkl012-mno345
 AZURE_TENANT_ID=12345678-90ab-cdef-1234-567890abcdef
-AZURE_REDIRECT_URI=http://localhost:3000/api/auth/callback
 
 # NinjaOne API
 NINJA_CLIENT_ID=a1b2c3d4e5f6g7h8i9j0
@@ -320,58 +295,41 @@ npm run dev
 
 Open http://localhost:3000
 
-### Step 2: Sync Azure Entra ID
+### Step 2: Sync from Excel
 
-1. Navigate to **Sync** page (or go to http://localhost:3000/sync)
-2. Under "Azure Entra ID Sync", click **Sync Now**
-3. Wait for completion (may take 1-5 minutes depending on employee count)
-4. Check for success message
-5. Review sync history to see records synced
-
-**What this does**:
-- Fetches all users from Azure Entra ID
-- Creates employee records in Supabase
-- Updates existing employee records
-- Sets employment status based on account status
-
-### Step 3: Verify Employee Data
-
-1. Navigate to **Employees** page
-2. You should see all your employees
-3. Check a few profiles to verify data accuracy
-4. If data looks good, proceed to next sync
-
-**If employees are missing**:
-- Check sync history for errors
-- Verify Azure permissions were granted
-- Check browser console for errors
-
-### Step 4: Sync NinjaOne
-
-1. Return to **Sync** page
-2. Under "NinjaOne Sync", click **Sync Now**
-3. Wait for completion (may take longer with many devices)
-4. Check for success message
-5. Review sync history
+1. Navigate to the **Sync** page (http://localhost:3000/sync)
+2. Click **Sync from Excel**
+3. Wait for completion (reads "BP Employee list and inventory.xlsx" from SharePoint)
+4. Check for success message and review sync history
 
 **What this does**:
-- Fetches all devices from NinjaOne
-- Creates device records in Supabase
-- Attempts to link devices to employees (via custom fields)
-- Syncs installed software for each device
+- Reads the Excel file from SharePoint via Microsoft Graph
+- Creates or updates employee records in Supabase
+- Creates or updates device records and assigns them to employees
+- NinjaOne sync may run afterward to fill in device details (serial, OS, software)
+
+### Step 3: Verify Employee and Device Roster
+
+1. Go to **Employees** page — you should see employees from the Excel sheet
+2. Open an employee to see their devices from Excel
+3. If data looks good, device details will be filled when NinjaOne sync runs (after Excel sync or on schedule)
+
+**If Excel sync fails**:
+- Verify Azure App has SharePoint/OneDrive permissions
+- Check file name and location (see SHAREPOINT_SETUP.md and EXCEL_MIGRATION_SUMMARY.md)
+
+### Step 4: NinjaOne (Device Details)
+
+After Excel sync, NinjaOne sync often runs automatically to populate serial numbers, OS, and software. You can also trigger it via cron (see README). Devices from Excel are matched to NinjaOne by name/serial.
 
 ### Step 5: Verify Device Data
 
-1. Navigate to **Devices** page
-2. You should see all devices from NinjaOne
-3. Click on an employee profile
-4. Check "Devices" tab to see assigned devices
-5. Verify software list appears
+1. Go to **Devices** page
+2. Confirm devices show details (serial, OS) where NinjaOne has matched
+3. On an employee profile, check that assigned devices and software appear
 
-**If devices aren't linking to employees**:
-- NinjaOne may not have employee email in custom fields
-- You may need to update the sync logic in `app/api/sync/ninjaone/route.ts`
-- Manual assignment may be needed in some cases
+**If devices aren’t linking**:
+- NinjaOne sync matches by device name/serial; see `app/api/sync/ninjaone/route.ts` if you need to adjust logic
 
 ### Step 6: Test Filtering and Search
 
@@ -428,10 +386,8 @@ In Vercel project settings:
 #### Step 5: Verify Cron Jobs
 
 1. In Vercel project, go to **Settings** > **Cron Jobs**
-2. You should see two cron jobs from `vercel.json`:
-   - Azure Entra ID sync (daily at 2 AM)
-   - NinjaOne sync (daily at 3 AM)
-3. Verify they're enabled
+2. You should see the NinjaOne cron (e.g. daily at 3 AM) from `vercel.json`
+3. Excel sync is typically run manually from the Sync page
 
 ### Option 2: Deploy to Other Platforms
 
@@ -451,18 +407,18 @@ npm run build
 
 ### Common Issues
 
-#### "Failed to sync Entra ID data"
+#### "Failed to sync Excel data" / SharePoint errors
 
 **Possible causes**:
-- Azure credentials incorrect
-- Permissions not granted
-- Admin consent not given
+- Azure credentials incorrect or missing
+- SharePoint/OneDrive permissions not granted
+- Excel file name or location wrong
 
 **Solutions**:
-1. Verify credentials in `.env`
-2. Check Azure App Registration permissions
-3. Grant admin consent again
-4. Check sync logs for detailed error
+1. Verify AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID in `.env`
+2. Check Azure App has Sites.Read.All or Files.Read.All (and admin consent)
+3. Confirm file name "BP Employee list and inventory.xlsx" and path (see SHAREPOINT_SETUP.md)
+4. Check sync logs on the Sync page for details
 
 #### "No devices showing for employees"
 
@@ -541,6 +497,18 @@ After successful setup:
    - Set up health checks
    - Monitor sync success rates
    - Review data accuracy regularly
+
+## Optional: Azure Entra ID
+
+The application **does not** sync from Azure Entra ID by default. Employee and device data come from **SharePoint Excel** and **NinjaOne**. The Azure App Registration above is used only for **Microsoft Graph access to the SharePoint Excel file**.
+
+If you ever want to add **Azure Entra ID** as a separate data source (e.g. to sync directory users and registered devices from Azure AD), you would need to:
+
+1. Add back an API route (e.g. `app/api/sync/entra-id/route.ts`) that calls Microsoft Graph for users and devices
+2. Add Graph permissions such as `User.Read.All`, `Directory.Read.All` to your Azure App
+3. Optionally add a Sync button or cron job for that endpoint
+
+The database still has `entra_id` and `manager_entra_id` on employees; Excel sync sets `entra_id` to the employee’s email for compatibility.
 
 ---
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Users as UsersIcon, Loader2 } from 'lucide-react'
+import { ArrowLeft, Users as UsersIcon, Loader2, UserPlus } from 'lucide-react'
 import EmployeeCard from '@/components/EmployeeCard'
 import EmployeeFilters, { FilterState } from '@/components/EmployeeFilters'
 import { Employee } from '@/lib/types'
@@ -15,7 +15,8 @@ export default function EmployeesPage() {
     search: '',
     status: '',
     department: '',
-    office: ''
+    office: '',
+    branch: ''
   })
 
   useEffect(() => {
@@ -69,19 +70,24 @@ export default function EmployeesPage() {
       filtered = filtered.filter(emp => emp.employment_status === filters.status)
     }
 
-    // Department filter
+    // Department filter - exact match for dropdown selection
     if (filters.department) {
-      const deptLower = filters.department.toLowerCase()
       filtered = filtered.filter(emp => 
-        emp.department?.toLowerCase().includes(deptLower)
+        emp.department?.toLowerCase() === filters.department.toLowerCase()
       )
     }
 
-    // Office filter
+    // Office filter - exact match for dropdown selection
     if (filters.office) {
-      const officeLower = filters.office.toLowerCase()
       filtered = filtered.filter(emp => 
-        emp.office_location?.toLowerCase().includes(officeLower)
+        emp.office_location?.toLowerCase() === filters.office.toLowerCase()
+      )
+    }
+
+    // Branch filter - exact match for dropdown selection
+    if (filters.branch) {
+      filtered = filtered.filter(emp => 
+        (emp as any).branch_name?.toLowerCase() === filters.branch.toLowerCase()
       )
     }
 
@@ -115,10 +121,17 @@ export default function EmployeesPage() {
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Employees</h1>
               <p className="text-gray-600">
-                Manage and view all employees synced from Azure Entra ID
+                Manage and view all employees synced from Excel or added manually
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
+              <Link
+                href="/onboard"
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Onboard Employee
+              </Link>
               <UsersIcon className="w-8 h-8 text-blue-600" />
             </div>
           </div>
