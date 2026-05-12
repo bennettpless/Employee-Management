@@ -1,6 +1,6 @@
 # Phase 5: Configuration & Deployment
 
-## Status: 🟡 In Progress
+## Status: ✅ Complete
 
 ## Overview
 Configure Next.js, Tailwind, TypeScript, and Vercel deployment including cron scheduling.
@@ -14,13 +14,15 @@ Configure Next.js, Tailwind, TypeScript, and Vercel deployment including cron sc
 - [x] TypeScript config with path aliases (`tsconfig.json`)
 - [x] Vercel cron for daily NinjaOne sync (`vercel.json`)
 - [x] Environment variable documentation (`README.md`, `SETUP_GUIDE.md`)
-- [ ] Add runtime environment variable validation
+- [x] Add runtime environment variable validation
 
 ## Key Files
 - `next.config.js`
 - `tailwind.config.ts`
 - `tsconfig.json`
 - `vercel.json`
+- `lib/env.ts`
+- `instrumentation.ts`
 - `README.md`, `SETUP_GUIDE.md`, `SHAREPOINT_SETUP.md`
 
 ## Remaining Work
@@ -53,9 +55,12 @@ export function validateEnv() {
 - [x] `next build` passes
 - [x] Vercel cron schedule is correct (daily 03:00 UTC)
 - [x] Environment variables are documented
-- [ ] Runtime env validation catches missing variables at startup
+- [x] Runtime env validation catches missing variables at startup
 
 ## Implementation Notes
 - `next.config.js` disables webpack cache in dev to fix Windows hang issue
 - `images.domains` includes `graph.microsoft.com` for potential user photos
 - NinjaOne cron runs daily at `0 3 * * *` — only NinjaOne, not Excel (Excel sync is manual)
+- Runtime env validation via `lib/env.ts` runs at server startup through Next.js `instrumentation.ts` hook
+- Validation covers both the original 8 vars from the spec plus `NINJA_CLIENT_ID` and `NINJA_CLIENT_SECRET`
+- `NINJA_REGION` is optional (defaults to `'us'` in `lib/ninjaone.ts`)

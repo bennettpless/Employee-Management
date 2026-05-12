@@ -14,7 +14,7 @@
 | 2. Integration Libraries | [02-integration-libs.md](./02-integration-libs.md) | ✅ Complete | — |
 | 3. API Routes | [03-api-routes.md](./03-api-routes.md) | ✅ Complete | — |
 | 4. UI Components | [04-ui-components.md](./04-ui-components.md) | ✅ Complete | — |
-| 5. Configuration & Deployment | [05-config-deployment.md](./05-config-deployment.md) | 🟡 In Progress | — |
+| 5. Configuration & Deployment | [05-config-deployment.md](./05-config-deployment.md) | ✅ Complete | — |
 | 6. Error Handling & Resilience | [06-error-handling.md](./06-error-handling.md) | ⬜ Pending | — |
 | 7. Code Cleanup & Hygiene | [07-code-cleanup.md](./07-code-cleanup.md) | ⬜ Pending | — |
 | 8. Testing | [08-testing.md](./08-testing.md) | ⬜ Pending | — |
