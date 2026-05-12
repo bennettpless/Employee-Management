@@ -1,6 +1,6 @@
 # Phase 6: Error Handling & Resilience
 
-## Status: ⬜ Pending
+## Status: ✅ Complete
 
 ## Overview
 Add framework-level error boundaries, loading states, not-found pages, and dynamic health checks to make the application resilient and user-friendly when things go wrong.
@@ -9,11 +9,11 @@ Add framework-level error boundaries, loading states, not-found pages, and dynam
 - ✅ Phase 1–5 complete (or in progress)
 
 ## Planned Changes
-- [ ] Add root `app/error.tsx` error boundary
-- [ ] Add root `app/not-found.tsx` custom 404 page
-- [ ] Add root `app/loading.tsx` for route-level suspense fallback
-- [ ] Add route-specific `error.tsx` for `/employees`, `/devices`, `/sync`
-- [ ] Add dynamic health checks on Settings page (verify DB, Graph, NinjaOne connectivity)
+- [x] Add root `app/error.tsx` error boundary
+- [x] Add root `app/not-found.tsx` custom 404 page
+- [x] Add root `app/loading.tsx` for route-level suspense fallback
+- [x] Add route-specific `error.tsx` for `/employees`, `/devices`, `/sync`
+- [x] Add dynamic health checks on Settings page (verify DB, NinjaOne connectivity)
 
 ## Implementation Details
 
@@ -80,11 +80,17 @@ Add API endpoints or client-side checks that verify:
 - NinjaOne: Token acquisition succeeds
 
 ## Verification Checklist
-- [ ] `error.tsx` catches and displays runtime errors gracefully
-- [ ] `not-found.tsx` renders for invalid routes
-- [ ] `loading.tsx` shows during route transitions
-- [ ] Settings page shows live connection status (green/red)
-- [ ] `npm run build` passes
+- [x] `error.tsx` catches and displays runtime errors gracefully
+- [x] `not-found.tsx` renders for invalid routes
+- [x] `loading.tsx` shows during route transitions
+- [x] Settings page shows live connection status (green/red)
+- [x] `npm run build` passes
 
 ## Implementation Notes
-[To be added during implementation]
+- Root `app/error.tsx` provides a catch-all error boundary with "Try again" and "Back to Home" actions, styled consistently with the app's gradient background.
+- Root `app/not-found.tsx` shows a branded 404 page with a large heading and navigation back to home.
+- Root `app/loading.tsx` displays a centered spinner with "Loading..." text during route transitions.
+- Route-specific `error.tsx` files for `/employees`, `/devices`, and `/sync` provide contextual error messages (e.g., "Failed to load employees") with a "Retry" button and "Back to Home" link.
+- `GET /api/health` endpoint runs parallel checks against Supabase (head query on employees table) and NinjaOne (OAuth token acquisition), returning status, latency, and error details.
+- Settings page now fetches `/api/health` on mount and shows a live status banner (green "All systems operational" or red "One or more services have issues"), per-service status badges with latency, error details when applicable, and a manual "Check Health" refresh button with timestamp.
+- Graph health check was omitted since Azure Graph/SharePoint integration is disconnected per architectural decisions.

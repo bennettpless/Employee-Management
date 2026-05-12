@@ -15,7 +15,7 @@
 | 3. API Routes | [03-api-routes.md](./03-api-routes.md) | ✅ Complete | — |
 | 4. UI Components | [04-ui-components.md](./04-ui-components.md) | ✅ Complete | — |
 | 5. Configuration & Deployment | [05-config-deployment.md](./05-config-deployment.md) | ✅ Complete | — |
-| 6. Error Handling & Resilience | [06-error-handling.md](./06-error-handling.md) | ⬜ Pending | — |
+| 6. Error Handling & Resilience | [06-error-handling.md](./06-error-handling.md) | ✅ Complete | — |
 | 7. Code Cleanup & Hygiene | [07-code-cleanup.md](./07-code-cleanup.md) | ⬜ Pending | — |
 | 8. Testing | [08-testing.md](./08-testing.md) | ⬜ Pending | — |
 | 9. Authentication & Authorization | [09-auth.md](./09-auth.md) | ⬜ Pending (Future) | — |
