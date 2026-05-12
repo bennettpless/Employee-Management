@@ -17,7 +17,7 @@
 | 5. Configuration & Deployment | [05-config-deployment.md](./05-config-deployment.md) | ✅ Complete | — |
 | 6. Error Handling & Resilience | [06-error-handling.md](./06-error-handling.md) | ✅ Complete | — |
 | 7. Code Cleanup & Hygiene | [07-code-cleanup.md](./07-code-cleanup.md) | ✅ Complete | — |
-| 8. Testing | [08-testing.md](./08-testing.md) | ⬜ Pending | — |
+| 8. Testing | [08-testing.md](./08-testing.md) | ✅ Complete | — |
 | 9. Authentication & Authorization | [09-auth.md](./09-auth.md) | ⬜ Pending (Future) | — |
 | 10. Deferred Features | [10-deferred-features.md](./10-deferred-features.md) | ⬜ Pending (Future) | — |
 
@@ -29,7 +29,12 @@
 
 ## Current Context
 
-The core application is built and functional. Phases 1-7 are complete. Phase 8 (testing) has not been started. Phases 9-10 are out of scope for v1.
+The core application is built and functional. Phases 1-8 are complete. Phases 9-10 are out of scope for v1.
+
+**Phase 8 testing completed:**
+- Vitest framework with jsdom, React Testing Library, and user-event
+- 70 tests across 5 files: excel-mapper (31), env validation (5), API routes (11), EmployeeCard (14), EmployeeFilters (9)
+- `npm test` / `npm run test:watch` / `npm run test:coverage` scripts added
 
 **Excel integration has been fully disconnected.** Employee data is now entered directly into the application. NinjaOne sync continues independently on a daily cron with a manual trigger option. A DevicePicker component allows users to assign devices from NinjaOne during onboarding or type a name manually.
 
