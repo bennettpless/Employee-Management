@@ -3,10 +3,10 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Employees table (synced from Azure Entra ID)
+-- Employees table (managed via application UI)
 CREATE TABLE employees (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    entra_id VARCHAR(255) UNIQUE NOT NULL, -- Azure Entra ID (Object ID)
+    entra_id VARCHAR(255) UNIQUE NOT NULL, -- Unique identifier (uses email)
     email VARCHAR(255) UNIQUE NOT NULL,
     first_name VARCHAR(100),
     last_name VARCHAR(100),

@@ -20,7 +20,6 @@ export async function POST(request: NextRequest) {
       ? `${firstName} ${lastName}` 
       : firstName || lastName || email
     
-    // Insert employee into database
     const { data: newEmployee, error: insertError } = await supabase
       .from('employees')
       .insert({
@@ -54,15 +53,9 @@ export async function POST(request: NextRequest) {
       throw insertError
     }
     
-    // Insert devices if provided
-    // Supports two formats:
-    // 1. device_id: existing device from picker (already in DB from NinjaOne sync)
-    // 2. devices: array of { device_name, device_type } for manual entry
-    // 3. Legacy: pc_names_active_enrolled as comma-separated string
     const devicesToAssign: Array<{ device_name: string; device_type: string | null; device_id?: string }> = []
     
     if (body.device_id) {
-      // Single device selected from picker
       devicesToAssign.push({ device_name: '', device_type: null, device_id: body.device_id })
     } else if (body.devices && Array.isArray(body.devices)) {
       for (const d of body.devices) {
@@ -94,15 +87,12 @@ export async function POST(request: NextRequest) {
     if (devicesToAssign.length > 0) {
       for (const device of devicesToAssign) {
         if (device.device_id) {
-          // Assign existing device from picker
           const { error: assignError } = await supabase
             .from('devices')
             .update({ employee_id: newEmployee.id })
             .eq('id', device.device_id)
           
-          if (assignError) {
-            console.error(`Error assigning device ${device.device_id}:`, assignError)
-          } else {
+          if (!assignError) {
             await supabase
               .from('device_assignments_history')
               .insert({
@@ -113,7 +103,6 @@ export async function POST(request: NextRequest) {
               })
           }
         } else {
-          // Create new device (manual entry)
           const { data: newDevice, error: createError } = await supabase
             .from('devices')
             .insert({
@@ -127,9 +116,7 @@ export async function POST(request: NextRequest) {
             .select('id')
             .single()
           
-          if (createError) {
-            console.error(`Error creating device ${device.device_name}:`, createError)
-          } else if (newDevice) {
+          if (!createError && newDevice) {
             await supabase
               .from('device_assignments_history')
               .insert({
@@ -141,10 +128,8 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-      console.log(`Processed ${devicesToAssign.length} device(s) for new employee`)
     }
     
-    // Insert software licenses if provided
     const softwareLicenses: Array<{ software_name: string; has_license: boolean }> = []
     const licenseFields = [
       'autocad', 'autocad_lt', 'aec', 'bim', 'bentley', 'hilti',
@@ -162,20 +147,14 @@ export async function POST(request: NextRequest) {
     }
     
     if (softwareLicenses.length > 0) {
-      const { error: licensesError } = await supabase
+      await supabase
         .from('employee_software_licenses')
         .insert(softwareLicenses.map(l => ({
           employee_id: newEmployee.id,
           software_name: l.software_name,
           has_license: l.has_license
         })))
-      
-      if (licensesError) {
-        console.error('Error inserting software licenses:', licensesError)
-      }
     }
-    
-    console.log(`Employee onboarded successfully: ${newEmployee.email} (ID: ${newEmployee.id})`)
     
     return NextResponse.json({ 
       success: true,

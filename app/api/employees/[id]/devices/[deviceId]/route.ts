@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
 
-/**
- * Remove a device from an employee
- * DELETE /api/employees/[id]/devices/[deviceId]
- */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string; deviceId: string } }
@@ -12,7 +8,6 @@ export async function DELETE(
   try {
     const supabase = getServiceSupabase()
     
-    // Fetch employee
     const { data: employee, error: empError } = await supabase
       .from('employees')
       .select('id, email')
@@ -26,7 +21,6 @@ export async function DELETE(
       )
     }
     
-    // Fetch device
     const { data: device, error: deviceError } = await supabase
       .from('devices')
       .select('id, device_name, employee_id')
@@ -47,18 +41,13 @@ export async function DELETE(
       )
     }
     
-    // Unassign device
     const { error: unassignError } = await supabase
       .from('devices')
-      .update({ 
-        employee_id: null,
-        updated_at: new Date().toISOString()
-      })
+      .update({ employee_id: null })
       .eq('id', params.deviceId)
     
     if (unassignError) throw unassignError
     
-    // Update assignment history
     await supabase
       .from('device_assignments_history')
       .update({
@@ -69,15 +58,13 @@ export async function DELETE(
       .eq('employee_id', params.id)
       .eq('is_current', true)
     
-    console.log(`[REMOVE DEVICE] Unassigned device "${device.device_name}" from employee ${employee.email}`)
-    
     return NextResponse.json({ 
       success: true,
       message: 'Device removed successfully',
       device: { id: params.deviceId, device_name: device.device_name }
     })
   } catch (error: any) {
-    console.error('[REMOVE DEVICE] Error removing device:', error)
+    console.error('Error removing device:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to remove device' },
       { status: 500 }

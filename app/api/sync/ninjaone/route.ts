@@ -6,12 +6,11 @@ export const maxDuration = 600
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
-  console.log('=== NinjaOne Sync Started ===')
   try {
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.SYNC_CRON_SECRET
     
-    if (authHeader && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret || !authHeader || authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -19,7 +18,6 @@ export async function POST(request: NextRequest) {
     const startTime = Date.now()
 
     // Clean up duplicate devices before sync
-    console.log('Checking for duplicate devices...')
     const { data: allDevices } = await supabase
       .from('devices')
       .select('id, device_name, employee_id, ninja_device_id, serial_number, manufacturer, model, os_name, is_in_ninja')
@@ -36,7 +34,6 @@ export async function POST(request: NextRequest) {
         deviceGroups.get(key)!.push(device)
       }
       
-      let duplicatesMerged = 0
       for (const [, devices] of deviceGroups.entries()) {
         if (devices.length <= 1) continue
         
@@ -55,21 +52,14 @@ export async function POST(request: NextRequest) {
         const devicesToDelete = scoredDevices.slice(1).map((d: any) => d.device)
         
         for (const duplicate of devicesToDelete) {
-          const { error: deleteError } = await supabase
+          await supabase
             .from('devices')
             .delete()
             .eq('id', duplicate.id)
-          
-          if (!deleteError) duplicatesMerged++
         }
-      }
-      
-      if (duplicatesMerged > 0) {
-        console.log(`Cleaned up ${duplicatesMerged} duplicate device(s)`)
       }
     }
 
-    // Create sync log entry
     const { data: syncLog } = await supabase
       .from('sync_logs')
       .insert({
@@ -86,7 +76,6 @@ export async function POST(request: NextRequest) {
 
     try {
       const ninjaDevices = await ninjaOne.getDevices()
-      console.log(`Fetched ${ninjaDevices.length} devices from NinjaOne`)
 
       const BATCH_SIZE = 10
       const batches = []
@@ -95,11 +84,7 @@ export async function POST(request: NextRequest) {
         batches.push(ninjaDevices.slice(i, i + BATCH_SIZE))
       }
 
-      console.log(`Processing ${ninjaDevices.length} devices in ${batches.length} batches`)
-
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex]
-
+      for (const batch of batches) {
         const results = await Promise.all(batch.map(async (device: any) => {
           try {
             const deviceDetails = await ninjaOne.getDevice(device.id.toString())
@@ -107,13 +92,8 @@ export async function POST(request: NextRequest) {
             const deviceNameLower = deviceName.toLowerCase()
             const ninjaSerialNumber = (deviceDetails.system?.serialNumber || deviceDetails.system?.biosSerialNumber || '').trim().toUpperCase()
             
-            // Match strategy:
-            // 1. By ninja_device_id (exact NinjaOne ID)
-            // 2. By device name (exact or case-insensitive)
-            // 3. By serial number (for manually created devices)
             let existingDevice = null
             
-            // 1. Match by ninja_device_id
             const { data: byNinjaId } = await supabase
               .from('devices')
               .select('id, employee_id, device_name, ninja_device_id, serial_number')
@@ -122,7 +102,6 @@ export async function POST(request: NextRequest) {
             
             existingDevice = byNinjaId
             
-            // 2. Match manually-created devices (manual- prefix) by name
             if (!existingDevice && deviceName) {
               const { data: manualDevices } = await supabase
                 .from('devices')
@@ -134,14 +113,12 @@ export async function POST(request: NextRequest) {
                   const candidateName = (candidate.device_name || '').trim().toLowerCase()
                   if (candidateName === deviceNameLower) {
                     existingDevice = candidate
-                    console.log(`  Matched NinjaOne device "${deviceName}" to manual device "${candidate.device_name}"`)
                     break
                   }
                 }
               }
             }
             
-            // 3. Match by device_name (case-insensitive) for any device
             if (!existingDevice && deviceName) {
               const { data: byName } = await supabase
                 .from('devices')
@@ -152,7 +129,6 @@ export async function POST(request: NextRequest) {
               existingDevice = byName
             }
             
-            // 4. Match by serial number
             if (!existingDevice && ninjaSerialNumber && ninjaSerialNumber.length >= 4) {
               const { data: bySerial } = await supabase
                 .from('devices')
@@ -162,7 +138,6 @@ export async function POST(request: NextRequest) {
               
               if (bySerial) {
                 existingDevice = bySerial
-                console.log(`  Matched NinjaOne device "${deviceName}" to existing device "${bySerial.device_name}" by serial number`)
               }
             }
 
@@ -187,7 +162,6 @@ export async function POST(request: NextRequest) {
               last_synced_at: new Date().toISOString()
             }
             
-            // Preserve employee assignment - NinjaOne sync never changes assignments
             if (existingDevice?.employee_id) {
               deviceData.employee_id = existingDevice.employee_id
             }
@@ -219,7 +193,6 @@ export async function POST(request: NextRequest) {
               deviceId = newDevice.id
             }
 
-            // Sync software in background
             ninjaOne.getDeviceSoftware(device.id)
               .then(async (softwareList) => {
                 if (!softwareList?.length) return
@@ -281,12 +254,8 @@ export async function POST(request: NextRequest) {
           }
         }))
 
-        const batchSynced = results.filter((r: any) => r.success).length
-        const batchFailed = results.filter((r: any) => !r.success).length
-        recordsSynced += batchSynced
-        recordsFailed += batchFailed
-        
-        console.log(`Batch ${batchIndex + 1}/${batches.length}: ${batchSynced} synced, ${batchFailed} failed | Total: ${recordsSynced}/${recordsFailed}`)
+        recordsSynced += results.filter((r: any) => r.success).length
+        recordsFailed += results.filter((r: any) => !r.success).length
       }
       
       const duration = Math.floor((Date.now() - startTime) / 1000)
@@ -303,9 +272,6 @@ export async function POST(request: NextRequest) {
           duration_seconds: duration
         })
         .eq('id', syncLog!.id)
-
-      console.log(`\n=== NinjaOne Sync Complete ===`)
-      console.log(`Synced: ${recordsSynced} | Failed: ${recordsFailed} | Duration: ${duration}s`)
 
       return NextResponse.json({
         success: true,

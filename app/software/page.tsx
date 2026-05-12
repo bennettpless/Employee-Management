@@ -72,9 +72,6 @@ export default function SoftwarePage() {
         return
       }
       
-      console.log('Fetched software:', data.software?.length || 0, 'items')
-      console.log('Pagination:', data.pagination)
-      
       setSoftware(data.software || [])
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages)

@@ -161,7 +161,6 @@ export function mapEmployeeToExcelRow(employee: any): ExcelRow {
     row[EXCEL_COLUMNS.LAST_FIRST] = ''
   }
   
-  console.log(`[Excel Mapper] LAST_FIRST mapping: lastName="${lastName}", firstName="${firstName}", result="${row[EXCEL_COLUMNS.LAST_FIRST]}"`)
   row[EXCEL_COLUMNS.NICK_NAME] = employee.nick_name || ''
   row[EXCEL_COLUMNS.USERNAME] = employee.username || ''
   row[EXCEL_COLUMNS.EMAIL_ADDRESS] = employee.email || ''

@@ -18,8 +18,6 @@ export async function GET(request: NextRequest) {
     let hasMore = true
     const maxBatches = 100
 
-    console.log('Fetching all software records in batches (without nested relationships)...')
-
     let batchCount = 0
     while (hasMore && batchCount < maxBatches) {
       // First fetch just software records (no nested relationships - much faster)
@@ -30,13 +28,11 @@ export async function GET(request: NextRequest) {
         .range(offset, offset + batchSize - 1)
 
       if (error) {
-        console.error(`Error fetching batch ${batchCount + 1} at offset ${offset}:`, error)
         throw error
       }
 
       if (batch && batch.length > 0) {
         allSoftware = allSoftware.concat(batch)
-        console.log(`Fetched batch ${batchCount + 1}: ${batch.length} records (total so far: ${allSoftware.length})`)
         offset += batch.length
         hasMore = batch.length === batchSize
       } else {
@@ -50,11 +46,6 @@ export async function GET(request: NextRequest) {
       console.warn(`Reached maximum batch limit (${maxBatches}). There may be more records.`)
     }
 
-    console.log(`Total software records fetched: ${allSoftware.length}`)
-    
-    // Now fetch device_software relationships in batches for all software IDs
-    // Supabase .in() has limits, so use smaller batches
-    console.log('Fetching device relationships for software...')
     const softwareIds = allSoftware.map(s => s.id)
     const deviceSoftwareMap = new Map<string, any[]>()
     
@@ -82,7 +73,6 @@ export async function GET(request: NextRequest) {
         .in('software_id', batchIds)
 
       if (dsError) {
-        console.error(`Error fetching device relationships for batch ${Math.floor(i / relationshipBatchSize) + 1} (IDs ${i} to ${i + batchIds.length - 1}):`, dsError)
         // Continue even if some batches fail
       } else if (deviceSoftware) {
         // Group by software_id
@@ -92,21 +82,14 @@ export async function GET(request: NextRequest) {
           }
           deviceSoftwareMap.get(ds.software_id)!.push(ds)
         })
-        console.log(`Fetched device relationships for batch ${Math.floor(i / relationshipBatchSize) + 1}: ${deviceSoftware.length} links`)
       }
     }
     
-    console.log(`Total device relationships fetched: ${deviceSoftwareMap.size} software items have device relationships`)
-    
-    // Attach device_software relationships to software records
     allSoftware.forEach((sw: any) => {
       sw.device_software = deviceSoftwareMap.get(sw.id) || []
     })
     
-    console.log(`Attached device relationships to software records`)
-    
     if (!allSoftware || allSoftware.length === 0) {
-      console.warn('No software records found in database')
       return NextResponse.json({ 
         software: [],
         pagination: {
@@ -321,21 +304,12 @@ export async function GET(request: NextRequest) {
     // Sort software by name
     softwareWithDevices.sort((a, b) => a.name.localeCompare(b.name))
 
-    const filteredOutCount = groupedSoftware.length - softwareWithDevices.length
-
-    console.log(`Processed ${processedCount} software records`)
-    console.log(`Grouped ${software.length} raw records into ${groupedSoftware.length} unique software items`)
-    console.log(`Filtered out ${filteredOutCount} software items with 0 devices`)
-    console.log(`Final count: ${softwareWithDevices.length} software items with devices`)
-
     // Calculate pagination (using filtered software)
     const totalItems = softwareWithDevices.length
     const totalPages = Math.ceil(totalItems / limit)
     const startIndex = (page - 1) * limit
     const endIndex = startIndex + limit
     const paginatedSoftware = softwareWithDevices.slice(startIndex, endIndex)
-
-    console.log(`Returning page ${page} of ${totalPages}: ${paginatedSoftware.length} items (${startIndex + 1}-${Math.min(endIndex, totalItems)} of ${totalItems})`)
 
     return NextResponse.json({ 
       software: paginatedSoftware,

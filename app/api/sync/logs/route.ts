@@ -5,19 +5,17 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getServiceSupabase()
     
-    // Get the last 10 logs overall, but also ensure we get the most recent NinjaOne log
     const { data: allLogs, error: allError } = await supabase
       .from('sync_logs')
       .select('*')
       .order('started_at', { ascending: false })
-      .limit(20) // Get more logs to ensure we catch the new one
+      .limit(20)
 
     if (allError) {
       throw allError
     }
 
-    // Also get the most recent NinjaOne log specifically
-    const { data: latestNinjaLog, error: ninjaError } = await supabase
+    const { data: latestNinjaLog } = await supabase
       .from('sync_logs')
       .select('*')
       .eq('sync_type', 'ninjaone')
@@ -25,7 +23,6 @@ export async function GET(request: NextRequest) {
       .limit(1)
       .maybeSingle()
 
-    // Combine and deduplicate
     const logsMap = new Map()
     if (allLogs) {
       allLogs.forEach(log => logsMap.set(log.id, log))
@@ -36,9 +33,8 @@ export async function GET(request: NextRequest) {
     
     const logs = Array.from(logsMap.values())
       .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
-      .slice(0, 10) // Return top 10
+      .slice(0, 10)
 
-    // Return with no-cache headers to ensure fresh data
     return NextResponse.json(
       { logs: logs || [] },
       {
@@ -57,4 +53,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-

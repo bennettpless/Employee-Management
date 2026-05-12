@@ -35,14 +35,6 @@ export default function EmployeesPage() {
         cache: 'no-store'
       })
       const data = await response.json()
-      console.log('Fetched employees:', data.employees?.length, 'employees')
-      // Debug: log device counts for first few employees
-      if (data.employees && data.employees.length > 0) {
-        data.employees.slice(0, 5).forEach((emp: any) => {
-          const deviceCount = emp.devices?.[0]?.count ?? 0
-          console.log(`Employee ${emp.display_name || emp.email}: ${deviceCount} devices`)
-        })
-      }
       setEmployees(data.employees || [])
     } catch (error) {
       console.error('Error fetching employees:', error)

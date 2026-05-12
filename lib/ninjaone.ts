@@ -5,26 +5,35 @@ interface NinjaConfig {
 }
 
 class NinjaOneClient {
-  private config: NinjaConfig
+  private config: NinjaConfig | null = null
   private accessToken: string | null = null
   private tokenExpiry: number = 0
 
-  constructor() {
-    this.config = {
-      clientId: process.env.NINJA_CLIENT_ID!,
-      clientSecret: process.env.NINJA_CLIENT_SECRET!,
-      region: process.env.NINJA_REGION || 'us'
+  private getConfig(): NinjaConfig {
+    if (!this.config) {
+      const clientId = process.env.NINJA_CLIENT_ID
+      const clientSecret = process.env.NINJA_CLIENT_SECRET
+      if (!clientId || !clientSecret) {
+        throw new Error('NINJA_CLIENT_ID and NINJA_CLIENT_SECRET must be set')
+      }
+      this.config = {
+        clientId,
+        clientSecret,
+        region: process.env.NINJA_REGION || 'us'
+      }
     }
+    return this.config
   }
 
   private getBaseUrl(): string {
+    const config = this.getConfig()
     const regionMap: { [key: string]: string } = {
       us: 'https://app.ninjarmm.com',
       eu: 'https://eu.ninjarmm.com',
       oc: 'https://oc.ninjarmm.com',
       ca: 'https://ca.ninjarmm.com'
     }
-    return regionMap[this.config.region] || regionMap.us
+    return regionMap[config.region] || regionMap.us
   }
 
   private async getAccessToken(): Promise<string> {
@@ -34,10 +43,11 @@ class NinjaOneClient {
     }
 
     const tokenUrl = `${this.getBaseUrl()}/ws/oauth/token`
+    const config = this.getConfig()
     const params = new URLSearchParams({
       grant_type: 'client_credentials',
-      client_id: this.config.clientId,
-      client_secret: this.config.clientSecret,
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
       scope: 'monitoring management'
     })
 
@@ -92,17 +102,6 @@ class NinjaOneClient {
     return this.makeRequest(`/device/${deviceId}/software`)
   }
 
-  async getOrganizations() {
-    return this.makeRequest('/organizations')
-  }
-
-  async getTickets() {
-    return this.makeRequest('/ticketing/ticket/board')
-  }
-
-  async getDeviceCustomFields(deviceId: string) {
-    return this.makeRequest(`/device/${deviceId}/custom-fields`)
-  }
 }
 
 export const ninjaOne = new NinjaOneClient()
@@ -132,21 +131,4 @@ export interface NinjaSoftware {
   publisher: string
   installDate?: string
 }
-
-export interface NinjaTicket {
-  id: string
-  subject: string
-  description: string
-  status: string
-  priority: string
-  category: string
-  requester: {
-    email: string
-    name: string
-  }
-  createTime: string
-  updateTime: string
-}
-
-
 

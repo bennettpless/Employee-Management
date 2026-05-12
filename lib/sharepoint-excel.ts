@@ -134,6 +134,16 @@ async function getWorkbookPath(client: any): Promise<string> {
   return `${sitePath}/drive/items/${itemId}/workbook`
 }
 
+function getColumnLetter(colIndex: number): string {
+  let result = ''
+  let index = colIndex
+  while (index >= 0) {
+    result = String.fromCharCode(65 + (index % 26)) + result
+    index = Math.floor(index / 26) - 1
+  }
+  return result
+}
+
 // Excel column mapping
 export const EXCEL_COLUMNS = {
   // Identifier (immutable)
@@ -189,67 +199,6 @@ export const EXCEL_COLUMNS = {
 
 export interface ExcelRow {
   [key: string]: string | number | boolean | null | undefined
-}
-
-/**
- * Get the Excel workbook from SharePoint
- */
-export async function getExcelWorkbook() {
-  const client = await getGraphClient()
-  
-  // First, try to find the file by path
-  // You'll need to provide the SharePoint site URL or site ID
-  // Example: /sites/{site-name}/drive/root:/{folder-path}/{filename}
-  
-  // Read environment variables at runtime
-  const sitePath = process.env.SHAREPOINT_SITE_PATH || ''
-  const filePath = process.env.SHAREPOINT_FILE_PATH || ''
-  
-  if (!sitePath || !filePath) {
-    throw new Error('SHAREPOINT_SITE_PATH and SHAREPOINT_FILE_PATH must be configured in environment variables. Please restart your dev server after adding them to .env.local')
-  }
-  
-  try {
-    // Build the file path - handle file path with or without leading slash
-    let normalizedFilePath = filePath
-    if (normalizedFilePath && !normalizedFilePath.startsWith('/')) {
-      normalizedFilePath = '/' + normalizedFilePath
-    }
-    // Remove trailing slash if present
-    if (normalizedFilePath.endsWith('/')) {
-      normalizedFilePath = normalizedFilePath.slice(0, -1)
-    }
-    
-    // URL encode the file path parts for spaces and special characters
-    const encodedPath = normalizedFilePath.split('/').map(part => encodeURIComponent(part)).join('/')
-    const encodedFileName = encodeURIComponent(EXCEL_FILE_NAME)
-    
-    // Get the file content
-    const fileContent = await client
-      .api(`${sitePath}/drive/root:${encodedPath}/${encodedFileName}:/content`)
-      .get()
-    
-    return fileContent
-  } catch (error: any) {
-    // If path-based access fails, try to search for the file
-    if (error.statusCode === 404) {
-      // Try searching for the file
-      const searchResults = await client
-        .api(`${sitePath}/drive/root/search(q='${encodeURIComponent(EXCEL_FILE_NAME)}')`)
-        .get()
-      
-      if (searchResults.value && searchResults.value.length > 0) {
-        const file = searchResults.value[0]
-        const fileContent = await client
-          .api(`${sitePath}/drive/items/${file.id}/content`)
-          .get()
-        
-        return fileContent
-      }
-    }
-    
-    throw new Error(`Failed to access Excel file: ${error.message}`)
-  }
 }
 
 /**
@@ -334,17 +283,6 @@ export async function readExcelSheet(): Promise<ExcelRow[]> {
       }
       
       console.log(`[readExcelSheet] Found ${values.length} rows in usedRange (${headers.length} columns)`)
-      
-      // Helper function to convert column index to Excel column letter
-      const getColumnLetter = (colIndex: number): string => {
-        let result = ''
-        let index = colIndex
-        while (index >= 0) {
-          result = String.fromCharCode(65 + (index % 26)) + result
-          index = Math.floor(index / 26) - 1
-        }
-        return result
-      }
       
       // Find the ID column index
       const idColumnIndex = headers.findIndex(h => h?.toString().trim() === 'ID')
@@ -590,16 +528,6 @@ export async function updateExcelRow(rowIndex: number, data: Partial<ExcelRow>):
         }
       }
       
-      // Update each cell - convert column index to Excel column letter (A, B, ..., Z, AA, AB, etc.)
-      const getColumnLetter = (colIndex: number): string => {
-        let result = ''
-        while (colIndex >= 0) {
-          result = String.fromCharCode(65 + (colIndex % 26)) + result
-          colIndex = Math.floor(colIndex / 26) - 1
-        }
-        return result
-      }
-      
       for (const update of updates) {
         const cellAddress = `${getColumnLetter(update.column)}${rowIndex + 1}`
         const columnName = headers[update.column]
@@ -686,18 +614,6 @@ export async function addExcelRow(data: ExcelRow): Promise<void> {
         rowValues.push(data[headerName] ?? null)
       }
       
-      // Convert column index to Excel column letter
-      const getColumnLetter = (colIndex: number): string => {
-        let result = ''
-        let index = colIndex
-        while (index >= 0) {
-          result = String.fromCharCode(65 + (index % 26)) + result
-          index = Math.floor(index / 26) - 1
-        }
-        return result
-      }
-      
-      // Add the row
       const lastColumnLetter = getColumnLetter(headers.length - 1)
       const rangeAddress = `A${nextRowIndex}:${lastColumnLetter}${nextRowIndex}`
       
@@ -770,18 +686,6 @@ export async function deleteExcelRow(rowIndex: number): Promise<void> {
       const headers = values[0] as string[]
       const columnCount = headers.length
       
-      // Convert column index to Excel column letter
-      const getColumnLetter = (colIndex: number): string => {
-        let result = ''
-        let index = colIndex
-        while (index >= 0) {
-          result = String.fromCharCode(65 + (index % 26)) + result
-          index = Math.floor(index / 26) - 1
-        }
-        return result
-      }
-      
-      // Delete the row by shifting rows up
       const lastColumnLetter = getColumnLetter(columnCount - 1)
       const rangeAddress = `A${rowIndex + 1}:${lastColumnLetter}${rowIndex + 1}`
       

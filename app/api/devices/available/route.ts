@@ -26,8 +26,10 @@ export async function GET(request: NextRequest) {
     }
     
     if (search.trim()) {
-      const term = search.trim()
-      query = query.or(`device_name.ilike.%${term}%,serial_number.ilike.%${term}%,model.ilike.%${term}%`)
+      const term = search.trim().replace(/[%_\\().,]/g, '')
+      if (term) {
+        query = query.or(`device_name.ilike.%${term}%,serial_number.ilike.%${term}%,model.ilike.%${term}%`)
+      }
     }
     
     const { data: devices, error } = await query
