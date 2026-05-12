@@ -58,7 +58,7 @@ export async function getAllUsers(): Promise<AzureUser[]> {
   let nextLink: string | undefined = undefined
 
   do {
-    const response = nextLink
+    const response: any = nextLink
       ? await client.api(nextLink).get()
       : await client
           .api('/users')
@@ -141,7 +141,7 @@ export async function getUserDevices(userId: string): Promise<AzureDevice[]> {
     let nextLink: string | undefined = undefined
 
     do {
-      const response = nextLink
+      const response: any = nextLink
         ? await client.api(nextLink).get()
         : await client
             .api(`/users/${userId}/registeredDevices`)

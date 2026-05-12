@@ -32,11 +32,6 @@ export default function EmployeeCard({ employee }: EmployeeCardProps) {
     }
   }
   
-  // Debug logging (remove after fixing)
-  if (deviceCount > 0) {
-    console.log(`EmployeeCard: ${employee.display_name || employee.email} - deviceCount: ${deviceCount}, devices structure:`, employee.devices)
-  }
-
 
   const statusColors = {
     active: 'bg-green-100 text-green-800 border-green-200',

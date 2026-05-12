@@ -11,7 +11,7 @@ export default function Home() {
             Employee Management System
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Unified employee management with SharePoint Excel and NinjaOne.
+            Unified employee and device management powered by NinjaOne.
             Keep track of employees, devices, software, and licenses all in one place.
           </p>
         </div>
@@ -27,7 +27,7 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-gray-900 ml-4">Employees</h2>
               </div>
               <p className="text-gray-600">
-                View and manage all employees synced from Azure Entra ID. Filter by department, office, and employment status.
+                View and manage all employees. Filter by department, office, and employment status.
               </p>
             </div>
           </Link>
@@ -83,7 +83,7 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-gray-900 ml-4">Sync Status</h2>
               </div>
               <p className="text-gray-600">
-                Monitor data synchronization from SharePoint Excel and NinjaOne. Trigger sync from Excel when needed.
+                Monitor data synchronization from NinjaOne. Trigger manual sync or view sync history.
               </p>
             </div>
           </Link>
@@ -112,8 +112,8 @@ export default function Home() {
                 <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
               </div>
               <div>
-                <h4 className="font-semibold text-gray-900 mb-1">SharePoint Excel Integration</h4>
-                <p className="text-gray-600 text-sm">Sync employee and device roster from your Excel inventory</p>
+                <h4 className="font-semibold text-gray-900 mb-1">Direct Employee Management</h4>
+                <p className="text-gray-600 text-sm">Add, edit, and manage employees directly in the application</p>
               </div>
             </div>
             <div className="flex items-start">

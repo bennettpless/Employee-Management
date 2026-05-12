@@ -1,15 +1,15 @@
 # Business Requirements Document (BRD)
 # Employee Management System
 
-**Version:** 1.0  
-**Last Updated:** February 2025  
+**Version:** 2.0  
+**Last Updated:** April 2026  
 **Status:** Active
 
 ---
 
 ## 1. Executive Summary
 
-The Employee Management System is an internal web application that provides a single place to view and manage employees, their assigned devices, software inventory, and software licenses. The system uses **SharePoint Excel** as the primary source for the employee and device roster and **NinjaOne** for device details and software inventory. It reduces manual tracking across spreadsheets and tools by syncing data into a central database (Supabase) and offering filtering, search, and reporting through a modern UI.
+The Employee Management System is an internal web application that provides a single place to view and manage employees, their assigned devices, software inventory, and software licenses. Employee data is entered directly into the application. **NinjaOne** provides device details and software inventory. The system reduces manual tracking by storing data in a central database (Supabase) and offering filtering, search, and reporting through a modern UI.
 
 ---
 
@@ -17,31 +17,31 @@ The Employee Management System is an internal web application that provides a si
 
 ### 2.1 Purpose
 
-- Centralize employee and device information that today lives in Excel and NinjaOne.
-- Give IT and HR a single place to see who has which devices, what software is installed, and which licenses are assigned.
-- Support onboarding (add employee + devices) and offboarding (unassign devices, update Excel).
-- Enable sync from the SharePoint Excel file so the app stays aligned with the official roster.
+- Centralize employee and device information in one application.
+- Give IT a single place to see who has which devices, what software is installed, and which licenses are assigned.
+- Support onboarding (add employee + devices) and offboarding (unassign devices, remove employee).
+- Enable device data sync from NinjaOne so device details stay current.
 
 ### 2.2 Scope
 
 **In scope**
 
-- Employee directory synced from SharePoint Excel.
-- Device roster from Excel; device details (serial, OS, software) from NinjaOne.
+- Employee directory with direct data entry (onboarding, editing, offboarding).
+- Device roster managed via the app; device details (serial, OS, software) from NinjaOne.
 - Filtering and search (department, office, branch, status).
 - Employee detail view with devices, software, licenses, and assignment history.
 - Device list and device detail (current/previous assignments).
-- License tracking and usage (including data from Excel).
-- Sync from Excel (manual and/or scheduled); NinjaOne sync after Excel or on schedule.
-- Onboarding new employees; offboarding (unassign devices, update Excel).
-- Sync status and history (logs).
+- License tracking and usage.
+- NinjaOne sync (manual trigger and daily cron); sync status and history.
+- DevicePicker component for assigning NinjaOne-synced devices or manual entry during onboarding.
 
 **Out of scope (current release)**
 
-- Azure Entra ID as a sync source (optional for future).
+- SharePoint Excel integration (disconnected in v2.0).
+- Azure Entra ID as a sync source.
 - Role-based access control / authentication UI.
 - Mobile app.
-- Ticketing system integration (tickets referenced in schema/UI but not a primary driver).
+- Ticketing system integration.
 
 ---
 
@@ -49,9 +49,8 @@ The Employee Management System is an internal web application that provides a si
 
 | Goal | Objective |
 |------|------------|
-| Single source of view | One place to see employees, devices, and software without switching between Excel and NinjaOne. |
-| Accurate roster | Keep employee and device roster in sync with the SharePoint Excel file. |
-| Rich device data | Combine Excel roster with NinjaOne data (serial, OS, installed software). |
+| Single source of view | One place to see employees, devices, and software without switching between tools. |
+| Accurate device data | Keep device details in sync with NinjaOne (serial, OS, installed software). |
 | Operational efficiency | Filter and search employees; see device and license usage; support onboarding/offboarding. |
 | Audit and history | Track device assignment history (current and previous users). |
 
@@ -61,24 +60,22 @@ The Employee Management System is an internal web application that provides a si
 
 | Role | Responsibility |
 |------|----------------|
-| IT / Operations | Day-to-day use: sync, device assignment, onboarding/offboarding, troubleshooting. |
-| HR (optional) | View employee list and assignments; may own Excel roster. |
+| IT / Operations | Day-to-day use: device assignment, onboarding/offboarding, troubleshooting. |
 | Management | View reports, license usage, and compliance. |
-| Development / Admin | Configuration (Supabase, Azure, NinjaOne), deployments, and maintenance. |
+| Development / Admin | Configuration (Supabase, NinjaOne), deployments, and maintenance. |
 
 ---
 
 ## 5. Data Sources and Integrations
 
-### 5.1 SharePoint Excel (Primary – Roster)
+### 5.1 Application UI (Primary - Employee Data)
 
-- **Source:** Single Excel file in SharePoint (e.g. **"BP Employee list and inventory.xlsx"**).
-- **Accessed via:** Microsoft Graph API (Azure App Registration with SharePoint/OneDrive permissions).
+- **Source:** Users enter employee data directly via the onboarding form and edit pages.
 - **Data provided:**
-  - Employees: name, email, department, office, job title, phone, status, and other columns as mapped.
-  - Device roster: which devices exist and which employee they’re assigned to (e.g. “PC Names Active / Enrolled”, “PC Type”).
-  - Software licenses: which employees have which licenses (e.g. AutoCAD, BIM, etc.).
-- **Flow:** User triggers “Sync from Excel” (or scheduled job); app reads Excel, creates/updates employees and devices in Supabase, and assigns devices to employees.
+  - Employees: name, email, department, office, job title, phone, status, and other fields.
+  - Device assignments: pick from NinjaOne-synced devices or type a device name manually.
+  - Software licenses: which employees have which licenses.
+- **Flow:** User fills out the onboarding form or edits employee details; data is saved directly to Supabase.
 
 ### 5.2 NinjaOne (Device Details)
 
@@ -87,12 +84,12 @@ The Employee Management System is an internal web application that provides a si
 - **Data provided:**
   - Device details: serial number, manufacturer, model, OS, etc.
   - Installed software and versions.
-- **Flow:** After Excel sync (or on a schedule), NinjaOne sync runs. The app matches NinjaOne devices to Excel devices by name/serial and updates Supabase with device details and software.
+- **Flow:** Daily cron or manual trigger syncs devices from NinjaOne. The app matches NinjaOne devices to existing database devices by name/serial and enriches them with hardware and software details.
 
 ### 5.3 Supabase (Database)
 
 - **Role:** Central database (PostgreSQL).
-- **Stores:** Employees, devices, device_software, device_assignments_history, licenses, license_assignments, sync_logs, and related tables.
+- **Stores:** Employees, devices, device_software, device_assignments_history, employee_software_licenses, sync_logs, and related tables.
 - **Access:** Next.js API routes use Supabase client (service role for backend).
 
 ---
@@ -103,12 +100,12 @@ The Employee Management System is an internal web application that provides a si
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| EM-1 | Display list of all employees synced from Excel. | Must |
+| EM-1 | Display list of all employees. | Must |
 | EM-2 | Support filtering by employment status, department, office location, branch. | Must |
 | EM-3 | Support search by name, email. | Must |
 | EM-4 | Display employee detail: profile, assigned devices, software, licenses, assignment history. | Must |
-| EM-5 | Support onboarding: add new employee (and optionally devices). | Must |
-| EM-6 | Support offboarding: unassign devices, update Excel (e.g. move device to “potential unused”). | Must |
+| EM-5 | Support onboarding: add new employee (and optionally devices via picker or manual entry). | Must |
+| EM-6 | Support offboarding: unassign devices, delete employee record. | Must |
 | EM-7 | Show previous device assignments (history) for an employee. | Should |
 
 ### 6.2 Device Management
@@ -118,35 +115,33 @@ The Employee Management System is an internal web application that provides a si
 | DM-1 | Display list of devices; show assignment (current user). | Must |
 | DM-2 | Deduplicate devices by serial number; single view per physical device where possible. | Must |
 | DM-3 | Show device detail: specs, OS, installed software, current and previous assignments. | Must |
-| DM-4 | Support filters (e.g. Ninja only, Azure/Excel only) as implemented. | Should |
-| DM-5 | Allow assigning/unassigning devices to/from employees; update Excel when applicable. | Must |
+| DM-4 | DevicePicker: searchable dropdown of NinjaOne devices plus manual entry fallback. | Must |
+| DM-5 | Allow assigning/unassigning devices to/from employees. | Must |
 
 ### 6.3 Sync and Data Integrity
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| SY-1 | Sync employee and device roster from SharePoint Excel on demand (Sync page). | Must |
-| SY-2 | After Excel sync, run or trigger NinjaOne sync to refresh device details. | Must |
-| SY-3 | Match Excel devices to NinjaOne devices by name and/or serial number. | Must |
-| SY-4 | Record sync history (sync_logs): type (excel, ninjaone), status, counts, duration, errors. | Must |
-| SY-5 | Optional: schedule NinjaOne sync (e.g. cron); Excel sync typically manual. | Should |
-| SY-6 | Clean up devices no longer present in Excel (per business rules). | Must |
+| SY-1 | Sync device details from NinjaOne on demand (Sync page) and via daily cron. | Must |
+| SY-2 | Match NinjaOne devices to database devices by ninja_device_id, name, or serial number. | Must |
+| SY-3 | Record sync history (sync_logs): type, status, counts, duration, errors. | Must |
+| SY-4 | NinjaOne sync never changes employee assignments (only enriches device data). | Must |
+| SY-5 | Clean up duplicate devices during sync. | Should |
 
 ### 6.4 Licenses and Software
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| LS-1 | Display software licenses; track seat usage and expiration where available. | Must |
-| LS-2 | Use license data from Excel where applicable. | Must |
-| LS-3 | Display installed software per device (from NinjaOne). | Must |
+| LS-1 | Display software licenses from employee_software_licenses table; track seat usage. | Must |
+| LS-2 | Display installed software per device (from NinjaOne). | Must |
 
 ### 6.5 User Interface and Navigation
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | UI-1 | Home dashboard with links to Employees, Devices, Software, Licenses, Sync, Settings. | Must |
-| UI-2 | Sync page: trigger “Sync from Excel”, view sync history and status. | Must |
-| UI-3 | Settings page: show configuration status (Supabase, Microsoft Graph/SharePoint, NinjaOne). | Should |
+| UI-2 | Sync page: trigger NinjaOne sync, view sync history and status. | Must |
+| UI-3 | Settings page: show configuration status (Supabase, NinjaOne). | Should |
 | UI-4 | Responsive layout (desktop-first; usable on smaller screens). | Should |
 
 ---
@@ -172,29 +167,27 @@ The Employee Management System is an internal web application that provides a si
 
 ## 9. Assumptions
 
-- The SharePoint Excel file (“BP Employee list and inventory.xlsx”) is the authoritative source for employee and device roster.
-- Excel column names and structure are stable or documented (see EXCEL_MIGRATION_SUMMARY.md / excel-mapper).
 - NinjaOne API credentials and scopes are available and stable.
-- Azure App Registration for Microsoft Graph (SharePoint) is created and consented.
 - Supabase project is provisioned and schema (including migrations) is applied.
-- Users have network access to SharePoint, NinjaOne API, and Supabase.
+- Employee data is entered and maintained directly through the application UI.
+- Device names in the application should match NinjaOne device names where possible for automatic matching.
 
 ---
 
 ## 10. Constraints
 
-- Excel sync and NinjaOne sync depend on third-party APIs (Microsoft Graph, NinjaOne); rate limits and availability apply.
-- Device matching between Excel and NinjaOne is best-effort (name/serial); naming conventions affect match quality.
-- No Azure Entra ID sync in current release; employee/device roster is from Excel + NinjaOne only.
+- NinjaOne sync depends on third-party API; rate limits and availability apply.
+- Device matching between app and NinjaOne is best-effort (name/serial); naming conventions affect match quality.
+- Excel-related database columns (excel_data, etc.) remain in schema but are no longer actively used.
 
 ---
 
 ## 11. Success Criteria
 
-- Employees and devices from Excel appear in the app after sync.
+- Employees can be onboarded, edited, and offboarded directly in the application.
 - Device details (serial, OS, software) from NinjaOne are visible on device and employee views.
-- Operators can run “Sync from Excel” and see clear success/failure and log history.
-- Onboarding and offboarding flows update the database and Excel as designed.
+- Operators can trigger NinjaOne sync and see clear success/failure and log history.
+- DevicePicker allows selecting NinjaOne devices or entering devices manually during onboarding.
 - Filtering and search return correct results for department, office, status, and name/email.
 
 ---
@@ -203,7 +196,8 @@ The Employee Management System is an internal web application that provides a si
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | Feb 2025 | — | Initial BRD; Excel + NinjaOne as sources; Entra ID out of scope. |
+| 1.0 | Jan 2026 | -- | Initial BRD; Excel + NinjaOne as sources; Entra ID out of scope. |
+| 2.0 | Apr 2026 | -- | Disconnected Excel/SharePoint integration; direct data entry; NinjaOne-only sync. |
 
 ---
 

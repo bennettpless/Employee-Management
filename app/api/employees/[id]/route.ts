@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
-import { readExcelSheet, updateExcelRow, EXCEL_COLUMNS } from '@/lib/sharepoint-excel'
-import { mapEmployeeToExcelRow } from '@/lib/excel-mapper'
 
 export async function GET(
   request: NextRequest,
@@ -360,121 +358,6 @@ export async function PUT(
     
     // Return the updated employee from the update response, not from a new query
     // This ensures we return the data that was actually written
-    
-    // Update Excel sheet
-    try {
-      // Fetch the full employee record to get excel_data (which contains the Excel ID)
-      const { data: fullEmployee } = await supabase
-        .from('employees')
-        .select('excel_data')
-        .eq('id', params.id)
-        .single()
-      
-      // Get the Excel ID from excel_data
-      const excelId = fullEmployee?.excel_data?.[EXCEL_COLUMNS.EMPLOYEE_ID]?.toString() || null
-      
-      // Use new email if it changed, otherwise use old email
-      const searchEmail = updateData.email || currentEmployee.email
-      
-      if (!excelId) {
-        console.warn(`⚠️ Employee ${params.id} does not have an Excel ID in excel_data. Using email lookup.`)
-        // Fallback to email lookup if ID is not available
-        const excelRows = await readExcelSheet()
-        // Try new email first, then old email as fallback
-        let rowIndex = excelRows.findIndex(row => {
-          const rowEmail = (row[EXCEL_COLUMNS.EMAIL_ADDRESS]?.toString() || '').trim().toLowerCase()
-          return rowEmail === searchEmail.toLowerCase()
-        })
-        
-        // If not found with new email and email changed, try old email
-        if (rowIndex < 0 && emailChanged) {
-          rowIndex = excelRows.findIndex(row => {
-            const rowEmail = (row[EXCEL_COLUMNS.EMAIL_ADDRESS]?.toString() || '').trim().toLowerCase()
-            return rowEmail === currentEmployee.email.toLowerCase()
-          })
-        }
-      
-      if (rowIndex >= 0) {
-          // Fetch devices and software licenses for Excel mapping
-          const { data: devices } = await supabase
-            .from('devices')
-            .select('device_name, device_type')
-            .eq('employee_id', params.id)
-          
-          const { data: softwareLicenses } = await supabase
-            .from('employee_software_licenses')
-            .select('software_name, has_license')
-            .eq('employee_id', params.id)
-          
-          // Ensure we use the updated values from updateData for name fields
-          const employeeForExcel = {
-            ...updatedEmployee,
-            first_name: updateData.first_name !== undefined ? updateData.first_name : updatedEmployee.first_name,
-            last_name: updateData.last_name !== undefined ? updateData.last_name : updatedEmployee.last_name,
-            display_name: updateData.display_name !== undefined ? updateData.display_name : updatedEmployee.display_name,
-            email: updateData.email !== undefined ? updateData.email : updatedEmployee.email,
-            username: updateData.username !== undefined ? updateData.username : updatedEmployee.username,
-            devices: devices || [],
-            software_licenses: softwareLicenses || []
-          }
-          
-          console.log(`[PUT /api/employees/${params.id}] Excel mapping (email lookup) - first_name: "${employeeForExcel.first_name}", last_name: "${employeeForExcel.last_name}"`)
-          
-          const excelData = mapEmployeeToExcelRow(employeeForExcel)
-          await updateExcelRow(rowIndex + 1, excelData)
-          console.log(`✅ Updated Excel row ${rowIndex + 1} for employee ${updatedEmployee.email} (using email lookup)`)
-        } else {
-          console.warn(`⚠️ Employee ${searchEmail} (and ${emailChanged ? currentEmployee.email : 'N/A'}) not found in Excel sheet`)
-        }
-      } else {
-        // Use Excel ID to find the row
-        const excelRows = await readExcelSheet()
-        const rowIndex = excelRows.findIndex(row => {
-          const rowId = (row[EXCEL_COLUMNS.EMPLOYEE_ID]?.toString() || '').trim()
-          return rowId === excelId.toString().trim()
-        })
-        
-        if (rowIndex >= 0) {
-          // Fetch devices and software licenses for Excel mapping
-          const { data: devices } = await supabase
-            .from('devices')
-            .select('device_name, device_type')
-            .eq('employee_id', params.id)
-          
-          const { data: softwareLicenses } = await supabase
-            .from('employee_software_licenses')
-            .select('software_name, has_license')
-            .eq('employee_id', params.id)
-          
-          // Prepare employee data with devices and licenses for Excel mapping
-          // Ensure we use the updated values from updateData for name fields
-          const employeeForExcel = {
-            ...updatedEmployee,
-            first_name: updateData.first_name !== undefined ? updateData.first_name : updatedEmployee.first_name,
-            last_name: updateData.last_name !== undefined ? updateData.last_name : updatedEmployee.last_name,
-            display_name: updateData.display_name !== undefined ? updateData.display_name : updatedEmployee.display_name,
-            email: updateData.email !== undefined ? updateData.email : updatedEmployee.email,
-            username: updateData.username !== undefined ? updateData.username : updatedEmployee.username,
-            devices: devices || [],
-            software_licenses: softwareLicenses || []
-          }
-          
-          console.log(`[PUT /api/employees/${params.id}] Excel mapping (Excel ID) - first_name: "${employeeForExcel.first_name}", last_name: "${employeeForExcel.last_name}"`)
-          
-        // Map updated employee to Excel format
-          const excelData = mapEmployeeToExcelRow(employeeForExcel)
-          // Preserve the Excel ID in the update
-          excelData[EXCEL_COLUMNS.EMPLOYEE_ID] = excelId
-        await updateExcelRow(rowIndex + 1, excelData) // +1 because Excel is 1-indexed and row 0 is headers
-          console.log(`✅ Updated Excel row ${rowIndex + 1} for employee ${updatedEmployee.email} (Excel ID: ${excelId})`)
-      } else {
-          console.warn(`⚠️ Employee with Excel ID ${excelId} not found in Excel sheet`)
-        }
-      }
-    } catch (excelError: any) {
-      console.error('❌ Error updating Excel sheet:', excelError)
-      // Don't fail the request if Excel update fails - database update succeeded
-    }
     
     return NextResponse.json({ 
       success: true,

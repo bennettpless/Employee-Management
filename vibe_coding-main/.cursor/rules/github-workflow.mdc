@@ -1,0 +1,109 @@
+---
+description: GitHub workflow and commit conventions
+globs: ["**/*"]
+---
+
+# GitHub Workflow Rules
+
+## Commit Messages
+
+### Format
+Use conventional commit format: `type(scope): description`
+
+### Types
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation only
+- `style`: Formatting, no code change
+- `refactor`: Code change that neither fixes nor adds
+- `test`: Adding or updating tests
+- `chore`: Build process, dependencies, etc.
+
+### Guidelines
+- Keep subject line under 50 characters
+- Use imperative mood ("Add feature" not "Added feature")
+- Don't end subject line with period
+- Add body for complex changes (separated by blank line)
+
+### Examples
+```
+feat(contracts): add file upload component
+fix(auth): resolve session refresh issue
+docs(readme): update setup instructions
+refactor(api): simplify Supabase query functions
+style(ui): fix inconsistent button padding
+test(contracts): add unit tests for validation
+chore(deps): update TanStack Query to v5
+```
+
+### Phase-Based Commits (Surgical Coding Workflow)
+When working through implementation phases:
+```
+feat(contract-review): complete 01-db-updates
+feat(contract-review): complete 02-api-updates
+feat(contract-review): complete 03-ui-updates
+```
+
+## Before Committing
+
+### Checklist
+- [ ] Code compiles without errors (`npm run build`)
+- [ ] No console.log statements in production code
+- [ ] No secrets or API keys in code
+- [ ] Feature works as expected
+- [ ] TypeScript types are correct (no `any`)
+- [ ] Linter passes (if configured)
+
+### Security Check
+- Never commit .env files
+- Never commit API keys or secrets
+- Use .gitignore for sensitive files
+- Check `git diff` before committing
+
+## Branching Strategy
+
+### Branch Naming
+- `feature/description` - new features
+- `fix/description` - bug fixes
+- `refactor/description` - code improvements
+
+### Workflow
+1. Create branch from main: `git checkout -b feature/my-feature`
+2. Make changes and commit frequently
+3. Push to remote: `git push -u origin feature/my-feature`
+4. Create pull request when ready
+5. Merge after review (auto-deploys to Vercel)
+
+## Replit ↔ Cursor Workflow
+
+### Replit → GitHub → Cursor
+```bash
+# In Replit
+git add .
+git commit -m "feat(feature-name): description"
+git push
+
+# In Cursor terminal
+git pull origin main
+```
+
+### Cursor → GitHub → Replit
+```bash
+# In Cursor terminal
+git add .
+git commit -m "feat(feature-name): description"
+git push
+
+# In Replit
+git pull origin main
+```
+
+## When Asked to Commit
+
+Follow this process:
+1. Stage relevant files: `git add [files]`
+2. Review changes: `git diff --staged`
+3. Commit with descriptive message using format above
+4. Push to remote branch
+
+Do not push to main directly unless instructed.

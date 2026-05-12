@@ -1,0 +1,698 @@
+---
+description: Split implementation plan into detailed step files
+globs: ["**/docs/**/*.md"]
+---
+
+# Implementation Steps Workflow
+
+## Purpose
+Break down the implementation plan into detailed, actionable step files that can be executed independently with clear start/stop points.
+
+## Trigger
+When the user has an approved implementation plan at `docs/[feature-name]/implementation-plan.md` and wants to create detailed step files.
+
+## Prerequisites
+- Approved PRD at `docs/[feature-name]/prd.md`
+- Approved implementation plan at `docs/[feature-name]/implementation-plan.md`
+
+## Process
+
+### Step 1: Create Index File
+Create `docs/[feature-name]/00-index.md` as the state machine for the feature:
+
+```markdown
+# Feature: [Feature Name]
+
+## Status: 🟡 In Progress
+
+## Quick Links
+- [PRD](./prd.md)
+- [Implementation Plan](./implementation-plan.md)
+
+## Phases
+
+| Phase | File | Status | Commit |
+|-------|------|--------|--------|
+| 1. Database | [01-db-updates.md](./01-db-updates.md) | ⬜ Pending | — |
+| 2. API | [02-api-updates.md](./02-api-updates.md) | ⬜ Pending | — |
+| 3. UI Components | [03-ui-components.md](./03-ui-components.md) | ⬜ Pending | — |
+| 4. Integration | [04-integration.md](./04-integration.md) | ⬜ Pending | — |
+| 5. Testing | [05-testing.md](./05-testing.md) | ⬜ Pending | — |
+
+## Status Legend
+- ⬜ Pending
+- 🟡 In Progress
+- ✅ Complete
+- ⏸️ Blocked
+
+## Current Context
+[What the AI needs to know to continue from here - updated after each phase]
+
+## Architectural Decisions Made
+- [Decision 1]: [Rationale] (from Phase X)
+- [Decision 2]: [Rationale] (from Phase X)
+
+## Blockers / Open Questions
+- [ ] [Question or blocker]
+```
+
+### Step 2: Create Phase Files
+Generate detailed step files for each phase. Use the templates below.
+
+## Phase File Templates
+
+### 01-db-updates.md
+
+```markdown
+# Phase 1: Database Updates
+
+## Status: ⬜ Pending
+
+## Overview
+[Brief description of database changes]
+
+## Planned Changes
+- [ ] Create table: `[table_name]`
+- [ ] Add columns to existing table: `[table_name].[column_name]`
+- [ ] Create RLS policies for: `[table_name]`
+- [ ] Create indexes: `[index_name]`
+- [ ] Generate TypeScript types: `npm run update-types`
+
+## Migration SQL
+
+```sql
+-- Migration: [timestamp]_[description].sql
+
+-- 1. Create table
+CREATE TABLE IF NOT EXISTS public.[table_name] (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  
+  -- Feature-specific columns
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'pending', 'active', 'completed'))
+);
+
+-- 2. Enable RLS
+ALTER TABLE public.[table_name] ENABLE ROW LEVEL SECURITY;
+
+-- 3. RLS Policies
+CREATE POLICY "[table_name]_select_own"
+  ON public.[table_name]
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "[table_name]_insert_own"
+  ON public.[table_name]
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "[table_name]_update_own"
+  ON public.[table_name]
+  FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "[table_name]_delete_own"
+  ON public.[table_name]
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- 4. Indexes
+CREATE INDEX idx_[table_name]_user_id ON public.[table_name](user_id);
+CREATE INDEX idx_[table_name]_status ON public.[table_name](status);
+CREATE INDEX idx_[table_name]_created_at ON public.[table_name](created_at DESC);
+```
+
+## Rollback SQL
+
+```sql
+-- Rollback: [timestamp]_[description].sql
+DROP TABLE IF EXISTS public.[table_name] CASCADE;
+```
+
+## Seed Data
+
+```sql
+-- seed.sql (append to existing)
+INSERT INTO public.[table_name] (user_id, title, status)
+VALUES 
+  ('user-uuid-here', 'Sample Item 1', 'active'),
+  ('user-uuid-here', 'Sample Item 2', 'draft');
+```
+
+## TypeScript Types (Expected Output)
+
+After running `npm run update-types`, expect:
+
+```typescript
+// types/database.types.ts (auto-generated)
+export interface Database {
+  public: {
+    Tables: {
+      [table_name]: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          user_id: string;
+          title: string;
+          description: string | null;
+          status: 'draft' | 'pending' | 'active' | 'completed';
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          user_id: string;
+          title: string;
+          description?: string | null;
+          status?: 'draft' | 'pending' | 'active' | 'completed';
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          user_id?: string;
+          title?: string;
+          description?: string | null;
+          status?: 'draft' | 'pending' | 'active' | 'completed';
+        };
+      };
+    };
+  };
+}
+```
+
+## Verification Checklist
+- [ ] Migration runs without errors: `supabase db reset`
+- [ ] TypeScript types regenerated: `npm run update-types`
+- [ ] Seed data loads correctly
+- [ ] RLS policies work (test with different users)
+- [ ] `npm run build` passes
+
+## Implementation Notes
+[Added during/after implementation — gotchas, decisions made]
+```
+
+### 02-api-updates.md
+
+```markdown
+# Phase 2: API Updates
+
+## Status: ⬜ Pending
+
+## Overview
+[Brief description of API/server action changes]
+
+## Prerequisites
+- ✅ Phase 1 complete: Database tables and types exist
+
+## Planned Changes
+- [ ] Create Zod schema: `schemas/[feature].schema.ts`
+- [ ] Create server actions: `app/actions/[feature].ts`
+- [ ] Create query hooks: `lib/queries/[feature].ts`
+
+## Zod Schema
+
+```typescript
+// schemas/[feature].schema.ts
+import { z } from 'zod';
+
+export const create[Feature]Schema = z.object({
+  title: z.string().min(1, 'Title is required').max(200, 'Title too long'),
+  description: z.string().max(1000).optional(),
+  status: z.enum(['draft', 'pending', 'active', 'completed']).default('draft'),
+});
+
+export const update[Feature]Schema = create[Feature]Schema.partial();
+
+export type Create[Feature]Input = z.infer<typeof create[Feature]Schema>;
+export type Update[Feature]Input = z.infer<typeof update[Feature]Schema>;
+```
+
+## Server Actions
+
+```typescript
+// app/actions/[feature].ts
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { create[Feature]Schema, update[Feature]Schema } from '@/schemas/[feature].schema';
+import type { Database } from '@/types/database.types';
+
+type [Feature] = Database['public']['Tables']['[table_name]']['Row'];
+
+export async function create[Feature](formData: FormData) {
+  const supabase = await createClient();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: { message: 'Unauthorized' } };
+  }
+
+  const validatedFields = create[Feature]Schema.safeParse({
+    title: formData.get('title'),
+    description: formData.get('description'),
+    status: formData.get('status'),
+  });
+
+  if (!validatedFields.success) {
+    return { error: validatedFields.error.flatten().fieldErrors };
+  }
+
+  const { data, error } = await supabase
+    .from('[table_name]')
+    .insert({ ...validatedFields.data, user_id: user.id })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Create [feature] error:', error);
+    return { error: { message: 'Failed to create [feature]' } };
+  }
+
+  revalidatePath('/[feature]');
+  return { data };
+}
+
+export async function update[Feature](id: string, formData: FormData) {
+  const supabase = await createClient();
+  
+  const validatedFields = update[Feature]Schema.safeParse({
+    title: formData.get('title'),
+    description: formData.get('description'),
+    status: formData.get('status'),
+  });
+
+  if (!validatedFields.success) {
+    return { error: validatedFields.error.flatten().fieldErrors };
+  }
+
+  const { data, error } = await supabase
+    .from('[table_name]')
+    .update(validatedFields.data)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Update [feature] error:', error);
+    return { error: { message: 'Failed to update [feature]' } };
+  }
+
+  revalidatePath('/[feature]');
+  revalidatePath(`/[feature]/${id}`);
+  return { data };
+}
+
+export async function delete[Feature](id: string) {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from('[table_name]')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Delete [feature] error:', error);
+    return { error: { message: 'Failed to delete [feature]' } };
+  }
+
+  revalidatePath('/[feature]');
+  return { success: true };
+}
+```
+
+## Query Hooks
+
+```typescript
+// lib/queries/[feature].ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase/client';
+import type { Database } from '@/types/database.types';
+
+type [Feature] = Database['public']['Tables']['[table_name]']['Row'];
+
+export const [feature]Keys = {
+  all: ['[feature]s'] as const,
+  lists: () => [...[feature]Keys.all, 'list'] as const,
+  list: (filters: Record<string, unknown>) => [...[feature]Keys.lists(), filters] as const,
+  details: () => [...[feature]Keys.all, 'detail'] as const,
+  detail: (id: string) => [...[feature]Keys.details(), id] as const,
+};
+
+export function use[Feature]s(status?: string) {
+  return useQuery({
+    queryKey: [feature]Keys.list({ status }),
+    queryFn: async () => {
+      let query = supabase.from('[table_name]').select('*').order('created_at', { ascending: false });
+      if (status) query = query.eq('status', status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as [Feature][];
+    },
+  });
+}
+
+export function use[Feature](id: string) {
+  return useQuery({
+    queryKey: [feature]Keys.detail(id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('[table_name]')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data as [Feature];
+    },
+    enabled: !!id,
+  });
+}
+```
+
+## Verification Checklist
+- [ ] Zod schemas validate correctly
+- [ ] Server actions work with test data
+- [ ] Query hooks fetch data correctly
+- [ ] Error handling works as expected
+- [ ] `npm run build` passes
+
+## Implementation Notes
+[Added during/after implementation]
+```
+
+### 03-ui-components.md
+
+```markdown
+# Phase 3: UI Components
+
+## Status: ⬜ Pending
+
+## Overview
+[Brief description of UI components to build]
+
+## Prerequisites
+- ✅ Phase 1 complete: Database and types
+- ✅ Phase 2 complete: API and queries
+
+## Planned Changes
+- [ ] Create list page: `app/[feature]/page.tsx`
+- [ ] Create detail page: `app/[feature]/[id]/page.tsx`
+- [ ] Create list component: `components/[feature]/[Feature]List.tsx`
+- [ ] Create form component: `components/[feature]/[Feature]Form.tsx`
+- [ ] Create card component: `components/[feature]/[Feature]Card.tsx`
+
+## List Page
+
+```tsx
+// app/[feature]/page.tsx
+import { [Feature]List } from '@/components/[feature]/[Feature]List';
+
+export default function [Feature]Page() {
+  return (
+    <div className="container mx-auto py-8">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold">[Feature]s</h1>
+      </div>
+      <[Feature]List />
+    </div>
+  );
+}
+```
+
+## List Component
+
+```tsx
+// components/[feature]/[Feature]List.tsx
+'use client';
+
+import { use[Feature]s } from '@/lib/queries/[feature]';
+import { [Feature]Card } from './[Feature]Card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Loader2, Plus } from 'lucide-react';
+import Link from 'next/link';
+
+export function [Feature]List() {
+  const { data: items, isLoading, error } = use[Feature]s();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <p className="text-destructive">Error loading [feature]s: {error.message}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!items?.length) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <p className="text-muted-foreground mb-4">No [feature]s found</p>
+          <Button asChild>
+            <Link href="/[feature]/new">
+              <Plus className="h-4 w-4 mr-2" />
+              Create [Feature]
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {items.map((item) => (
+        <[Feature]Card key={item.id} item={item} />
+      ))}
+    </div>
+  );
+}
+```
+
+## Card Component
+
+```tsx
+// components/[feature]/[Feature]Card.tsx
+'use client';
+
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Edit, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import type { Database } from '@/types/database.types';
+
+type [Feature] = Database['public']['Tables']['[table_name]']['Row'];
+
+interface [Feature]CardProps {
+  item: [Feature];
+}
+
+const statusVariants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  active: 'default',
+  completed: 'secondary',
+  draft: 'outline',
+  pending: 'outline',
+};
+
+export function [Feature]Card({ item }: [Feature]CardProps) {
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <CardTitle className="text-lg">{item.title}</CardTitle>
+          <Badge variant={statusVariants[item.status] ?? 'outline'}>
+            {item.status}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground line-clamp-2">
+          {item.description ?? 'No description'}
+        </p>
+      </CardContent>
+      <CardFooter className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`/[feature]/${item.id}`}>
+            <Edit className="h-4 w-4" />
+          </Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+```
+
+## Form Component
+
+```tsx
+// components/[feature]/[Feature]Form.tsx
+'use client';
+
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { create[Feature]Schema, type Create[Feature]Input } from '@/schemas/[feature].schema';
+import { create[Feature] } from '@/app/actions/[feature]';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export function [Feature]Form() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<Create[Feature]Input>({
+    resolver: zodResolver(create[Feature]Schema),
+    defaultValues: {
+      status: 'draft',
+    },
+  });
+
+  const onSubmit = async (data: Create[Feature]Input) => {
+    setIsSubmitting(true);
+    
+    const formData = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined) formData.append(key, String(value));
+    });
+
+    const result = await create[Feature](formData);
+
+    if (result.error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to create [feature]',
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    toast({
+      title: 'Success',
+      description: '[Feature] created successfully',
+    });
+    router.push('/[feature]');
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Create [Feature]</CardTitle>
+      </CardHeader>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="title">Title</Label>
+            <Input
+              id="title"
+              {...register('title')}
+              placeholder="Enter title"
+            />
+            {errors.title && (
+              <p className="text-sm text-destructive">{errors.title.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              {...register('description')}
+              placeholder="Enter description"
+              rows={4}
+            />
+            {errors.description && (
+              <p className="text-sm text-destructive">{errors.description.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select
+              defaultValue="draft"
+              onValueChange={(value) => setValue('status', value as Create[Feature]Input['status'])}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Create [Feature]
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+}
+```
+
+## Verification Checklist
+- [ ] List page renders correctly
+- [ ] Cards display data properly
+- [ ] Form validates and submits
+- [ ] Error states are handled
+- [ ] Loading states show correctly
+- [ ] Navigation works
+- [ ] `npm run build` passes
+
+## Implementation Notes
+[Added during/after implementation]
+```
+
+## Output Checklist
+After creating step files, verify:
+- [ ] Index file exists: `docs/[feature-name]/00-index.md`
+- [ ] All phase files created: `01-db-updates.md`, `02-api-updates.md`, etc.
+- [ ] Each file has clear verification checklist
+- [ ] Code examples are complete and ready to implement
+- [ ] Status tracking is set up
+
+## Next Step
+Once step files are created, proceed to **Implement Step** using the `implement-step.mdc` rule, starting with Phase 1.
+
+## Context Preservation
+When stopping after this step:
+- All planning is complete in the `docs/[feature-name]/` folder
+- The `00-index.md` tracks overall progress
+- Each phase file is self-contained with full context
+- Resume by reading `00-index.md` to see current status

@@ -1,0 +1,135 @@
+---
+description: Code style and formatting conventions for Next.js App Router
+globs: ["**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"]
+---
+
+# Code Style Rules
+
+## General Principles
+- Write clear, readable code over clever code
+- Use descriptive variable and function names
+- Keep functions small and focused (single responsibility)
+- Comment complex logic, especially business rules
+
+## TypeScript / JavaScript
+
+### Naming
+- Use camelCase for variables and functions: `getUserData`, `isActive`
+- Use PascalCase for components and classes: `ContractList`, `UserService`
+- Use UPPER_SNAKE_CASE for constants: `MAX_FILE_SIZE`, `API_TIMEOUT`
+- Prefix boolean variables with is/has/should: `isLoading`, `hasError`
+
+### Functions
+- Use arrow functions for callbacks and inline functions
+- Use async/await over .then() chains
+- Always handle errors in async functions
+- Return early to reduce nesting
+
+### Example
+```typescript
+// Good: Clear naming, async/await, early return, typed
+const fetchContracts = async (status: string): Promise<Contract[]> => {
+  if (!status) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('contracts')
+      .select('*')
+      .eq('status', status);
+    
+    if (error) throw error;
+    return data ?? [];
+  } catch (err) {
+    console.error('Failed to fetch contracts:', err);
+    return [];
+  }
+};
+```
+
+## Next.js Components
+
+### Structure
+- 'use client' directive at top (only if needed)
+- Imports at top (external, then internal)
+- Component definition
+- Helper functions inside or extracted
+- Export at bottom (default export for pages)
+
+### Client Components (Hooks Order)
+1. useState declarations
+2. useQuery / useMutation (TanStack Query)
+3. useEffect for side effects
+4. Custom hooks
+5. Event handlers
+6. Render helpers
+7. Return JSX
+
+### Example (Client Component with TanStack Query + Shadcn/ui)
+```tsx
+'use client';
+
+import { useContracts } from '@/lib/queries';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Loader2 } from 'lucide-react';
+import type { Database } from '@/types/database.types';
+
+type Contract = Database['public']['Tables']['contracts']['Row'];
+
+interface ContractListProps {
+  onSelect: (contract: Contract) => void;
+}
+
+export default function ContractList({ onSelect }: ContractListProps) {
+  const { data: contracts, isLoading, error } = useContracts();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-destructive p-4">Error: {error.message}</div>;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Contracts</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableBody>
+            {contracts?.map((contract) => (
+              <TableRow 
+                key={contract.id} 
+                onClick={() => onSelect(contract)}
+                className="cursor-pointer hover:bg-muted"
+              >
+                <TableCell>{contract.title}</TableCell>
+                <TableCell>
+                  <Badge variant={contract.status === 'completed' ? 'default' : 'secondary'}>
+                    {contract.status}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+## TypeScript Rules
+
+- Add types for all Supabase table schemas via generated types
+- Use interfaces for object shapes, types for unions
+- Never use `any` — use `unknown` if truly unknown
+- Import types from `@/types/database.types`
+- Use generic Database type with Supabase client

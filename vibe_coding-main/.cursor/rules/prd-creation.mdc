@@ -1,0 +1,156 @@
+---
+description: Create a Product Requirements Document (PRD) for a new feature
+globs: ["**/docs/**/*.md"]
+---
+
+# PRD Creation Workflow
+
+## Purpose
+Generate a structured Product Requirements Document from either:
+- A user prompt describing a feature
+- An existing markdown file or folder of reference documents
+
+## Trigger
+When the user provides a feature description or references documents and asks to create a PRD.
+
+## Process
+
+### Step 1: Create Feature Directory
+Create a new folder in `docs/[feature-name]/` using kebab-case:
+
+```bash
+# Example: "User Authentication" becomes
+docs/user-authentication/
+```
+
+### Step 2: Gather Requirements
+If input is a **prompt**, ask clarifying questions:
+- What problem does this solve?
+- Who are the target users?
+- What are the key user stories?
+- What are the success criteria?
+- What is out of scope?
+
+If input is **reference documents**, extract:
+- Core requirements
+- User stories
+- Constraints and limitations
+- Technical dependencies
+
+### Step 3: Generate PRD
+Create `docs/[feature-name]/prd.md` using this template:
+
+```markdown
+# Feature: [Feature Name]
+
+## Status: 📋 Requirements
+
+## Problem Statement
+[Clear description of the problem this feature solves]
+
+## Target Users
+- [User type 1]: [Their needs]
+- [User type 2]: [Their needs]
+
+## User Stories
+- As a [user], I want [action] so that [benefit]
+- As a [user], I want [action] so that [benefit]
+
+## Acceptance Criteria
+- [ ] [Criterion 1 - specific, testable]
+- [ ] [Criterion 2 - specific, testable]
+- [ ] [Criterion 3 - specific, testable]
+
+## Data Model
+[Describe entities and relationships]
+
+```typescript
+// Example type definitions
+interface Entity {
+  id: string;
+  createdAt: Date;
+  // ... fields
+}
+```
+
+## UI/UX Requirements
+- [Screen/Component 1]: [Description]
+- [Screen/Component 2]: [Description]
+
+## API Requirements
+- [Endpoint 1]: [Method, purpose]
+- [Endpoint 2]: [Method, purpose]
+
+## Error Handling
+- [Error scenario 1]: [Expected behavior]
+- [Error scenario 2]: [Expected behavior]
+
+## Out of Scope
+- [What this feature does NOT include]
+- [Explicitly excluded functionality]
+
+## Dependencies
+- [Other features or systems this depends on]
+
+## Open Questions
+- [ ] [Question 1]
+- [ ] [Question 2]
+
+## References
+- [Link or reference to source documents]
+```
+
+## Code Example: Data Model Definition
+
+When defining the data model, use TypeScript interfaces that align with the tech stack:
+
+```typescript
+// types/[feature-name].types.ts
+import type { Database } from '@/types/database.types';
+
+// Table row type (from Supabase)
+export type Contract = Database['public']['Tables']['contracts']['Row'];
+
+// Insert type
+export type ContractInsert = Database['public']['Tables']['contracts']['Insert'];
+
+// Custom extended type
+export interface ContractWithDetails extends Contract {
+  assignee?: User;
+  comments?: Comment[];
+}
+```
+
+## Code Example: Zod Schema for Validation
+
+Define validation schemas alongside types:
+
+```typescript
+// schemas/[feature-name].schema.ts
+import { z } from 'zod';
+
+export const createContractSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200),
+  description: z.string().optional(),
+  status: z.enum(['draft', 'pending', 'active', 'completed']),
+  dueDate: z.string().datetime().optional(),
+});
+
+export type CreateContractInput = z.infer<typeof createContractSchema>;
+```
+
+## Output Checklist
+After creating the PRD, verify:
+- [ ] Feature folder exists: `docs/[feature-name]/`
+- [ ] PRD file created: `docs/[feature-name]/prd.md`
+- [ ] All user stories are specific and testable
+- [ ] Acceptance criteria are measurable
+- [ ] Data model is defined with TypeScript types
+- [ ] Out of scope is clearly defined
+- [ ] Open questions are documented
+
+## Next Step
+Once the PRD is complete and reviewed, proceed to **Implementation Plan** creation by referencing the `implementation-plan.mdc` rule.
+
+## Context Preservation
+When stopping after this step, the PRD document contains all context needed to resume. The next session should start by reading `docs/[feature-name]/prd.md`.

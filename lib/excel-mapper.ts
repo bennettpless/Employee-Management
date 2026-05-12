@@ -4,11 +4,7 @@ import { Employee } from './types'
 /**
  * Map Excel row to employee database record
  */
-export function mapExcelRowToEmployee(row: ExcelRow): Partial<Employee> & {
-  excelData: any
-  softwareLicenses: Array<{ software_name: string; has_license: boolean }>
-  devices: Array<{ device_name: string; device_type: string | null }>
-} {
+export function mapExcelRowToEmployee(row: ExcelRow) {
   // Extract device names from "PC Names Active / Enrolled" column
   // Remove dates in format (1/11/11) or (1/11/2011) from device names
   const pcNames = row[EXCEL_COLUMNS.PC_NAMES_ACTIVE_ENROLLED]?.toString() || ''

@@ -25,8 +25,6 @@ export default function EmployeeFilters({ onFilterChange }: EmployeeFiltersProps
   })
 
   const [showFilters, setShowFilters] = useState(false)
-  const [departments, setDepartments] = useState<string[]>([])
-  const [offices, setOffices] = useState<string[]>([])
 
   useEffect(() => {
     onFilterChange(filters)

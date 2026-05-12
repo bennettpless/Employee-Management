@@ -1,0 +1,587 @@
+---
+description: Implement a single step/phase from the implementation plan
+globs: ["**/*.ts", "**/*.tsx", "**/docs/**/*.md"]
+---
+
+# Implement Step Workflow
+
+## Purpose
+Execute a single implementation phase from the step files, with clear verification and documentation.
+
+## Trigger
+When the user wants to implement a specific phase (e.g., "implement Phase 1" or "implement 01-db-updates").
+
+## Prerequisites
+- Feature documentation exists at `docs/[feature-name]/`
+- Step files created via `implementation-steps.mdc` workflow
+- Previous phases completed (if dependencies exist)
+
+## Process
+
+### Step 1: Load Context
+1. Read `docs/[feature-name]/00-index.md` to understand current state
+2. Read the specific phase file (e.g., `01-db-updates.md`)
+3. Check status of prerequisite phases
+
+### Step 2: Safety Check
+Before implementing, verify:
+```bash
+git status
+```
+Ensure a clean working tree. If uncommitted changes exist, commit or stash them first.
+
+### Step 3: Update Status
+Mark the phase as "In Progress" in both:
+- The phase file header: `## Status: 🟡 In Progress`
+- The index file table
+
+### Step 4: Execute Implementation
+Follow the planned changes in the phase file:
+1. Execute each task in order
+2. Check off completed items
+3. Note any deviations or decisions made
+
+### Step 5: Verify
+Run the verification checklist from the phase file:
+```bash
+npm run build
+```
+If errors occur, fix them before proceeding.
+
+### Step 6: Update Documentation
+1. Mark phase as complete: `## Status: ✅ Complete`
+2. Add implementation notes to the phase file
+3. Update `00-index.md` with:
+   - Phase status: ✅ Complete
+   - Commit hash (after committing)
+   - Any architectural decisions made
+
+### Step 7: Commit
+```bash
+git add .
+git commit -m "feat([feature-name]): complete [phase-number]-[phase-name]"
+```
+
+## Implementation Patterns by Phase
+
+### Phase 1: Database Updates
+
+**File structure to create:**
+```
+supabase/
+└── migrations/
+    └── [timestamp]_[feature_name].sql
+```
+
+**Commands to run:**
+```bash
+# Apply migration
+supabase db reset
+
+# Generate types (CRITICAL!)
+npm run update-types
+```
+
+**Verification:**
+```bash
+# Check types were generated
+cat src/types/database.types.ts | grep "[table_name]"
+
+# Build to verify no type errors
+npm run build
+```
+
+### Phase 2: API Updates
+
+**File structure to create:**
+```
+src/
+├── schemas/
+│   └── [feature].schema.ts
+├── app/
+│   └── actions/
+│       └── [feature].ts
+└── lib/
+    └── queries/
+        └── [feature].ts
+```
+
+**Implementation order:**
+1. Create Zod schema first (validation)
+2. Create server actions (backend)
+3. Create query hooks (frontend data fetching)
+
+**Example: Complete Zod Schema**
+```typescript
+// src/schemas/contract.schema.ts
+import { z } from 'zod';
+
+// Create schema with full validation
+export const createContractSchema = z.object({
+  title: z
+    .string()
+    .min(1, 'Title is required')
+    .max(200, 'Title must be less than 200 characters'),
+  description: z
+    .string()
+    .max(2000, 'Description must be less than 2000 characters')
+    .optional()
+    .nullable(),
+  status: z
+    .enum(['draft', 'pending', 'active', 'completed'])
+    .default('draft'),
+  dueDate: z
+    .string()
+    .datetime({ message: 'Invalid date format' })
+    .optional()
+    .nullable(),
+  priority: z
+    .enum(['low', 'medium', 'high'])
+    .default('medium'),
+});
+
+// Partial schema for updates
+export const updateContractSchema = createContractSchema.partial();
+
+// Filter schema for queries
+export const contractFilterSchema = z.object({
+  status: z.enum(['draft', 'pending', 'active', 'completed']).optional(),
+  priority: z.enum(['low', 'medium', 'high']).optional(),
+  search: z.string().optional(),
+});
+
+// Type exports
+export type CreateContractInput = z.infer<typeof createContractSchema>;
+export type UpdateContractInput = z.infer<typeof updateContractSchema>;
+export type ContractFilter = z.infer<typeof contractFilterSchema>;
+```
+
+**Example: Complete Server Action**
+```typescript
+// src/app/actions/contract.ts
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { 
+  createContractSchema, 
+  updateContractSchema,
+  type CreateContractInput,
+} from '@/schemas/contract.schema';
+import type { Database } from '@/types/database.types';
+
+type Contract = Database['public']['Tables']['contracts']['Row'];
+
+interface ActionResult<T> {
+  data?: T;
+  error?: { message: string; fields?: Record<string, string[]> };
+}
+
+export async function createContract(
+  formData: FormData
+): Promise<ActionResult<Contract>> {
+  const supabase = await createClient();
+  
+  // Check authentication
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { error: { message: 'You must be logged in to create a contract' } };
+  }
+
+  // Parse and validate input
+  const rawData = {
+    title: formData.get('title'),
+    description: formData.get('description') || null,
+    status: formData.get('status') || 'draft',
+    dueDate: formData.get('dueDate') || null,
+    priority: formData.get('priority') || 'medium',
+  };
+
+  const validatedFields = createContractSchema.safeParse(rawData);
+
+  if (!validatedFields.success) {
+    return { 
+      error: { 
+        message: 'Validation failed',
+        fields: validatedFields.error.flatten().fieldErrors as Record<string, string[]>,
+      } 
+    };
+  }
+
+  // Insert into database
+  const { data, error } = await supabase
+    .from('contracts')
+    .insert({
+      ...validatedFields.data,
+      user_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Create contract error:', error);
+    return { error: { message: 'Failed to create contract. Please try again.' } };
+  }
+
+  // Revalidate cache and return
+  revalidatePath('/contracts');
+  return { data };
+}
+
+export async function updateContract(
+  id: string,
+  formData: FormData
+): Promise<ActionResult<Contract>> {
+  const supabase = await createClient();
+  
+  // Build update object only with provided fields
+  const updateData: Record<string, unknown> = {};
+  const fields = ['title', 'description', 'status', 'dueDate', 'priority'];
+  
+  for (const field of fields) {
+    const value = formData.get(field);
+    if (value !== null) {
+      updateData[field] = value || null;
+    }
+  }
+
+  const validatedFields = updateContractSchema.safeParse(updateData);
+
+  if (!validatedFields.success) {
+    return { 
+      error: { 
+        message: 'Validation failed',
+        fields: validatedFields.error.flatten().fieldErrors as Record<string, string[]>,
+      } 
+    };
+  }
+
+  const { data, error } = await supabase
+    .from('contracts')
+    .update(validatedFields.data)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Update contract error:', error);
+    return { error: { message: 'Failed to update contract. Please try again.' } };
+  }
+
+  revalidatePath('/contracts');
+  revalidatePath(`/contracts/${id}`);
+  return { data };
+}
+
+export async function deleteContract(id: string): Promise<ActionResult<boolean>> {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from('contracts')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Delete contract error:', error);
+    return { error: { message: 'Failed to delete contract. Please try again.' } };
+  }
+
+  revalidatePath('/contracts');
+  return { data: true };
+}
+```
+
+**Verification:**
+```bash
+# Type check
+npx tsc --noEmit
+
+# Build
+npm run build
+```
+
+### Phase 3: UI Components
+
+**File structure to create:**
+```
+src/
+├── app/
+│   └── [feature]/
+│       ├── page.tsx
+│       ├── loading.tsx
+│       ├── new/
+│       │   └── page.tsx
+│       └── [id]/
+│           ├── page.tsx
+│           └── edit/
+│               └── page.tsx
+└── components/
+    └── [feature]/
+        ├── [Feature]List.tsx
+        ├── [Feature]Card.tsx
+        ├── [Feature]Form.tsx
+        └── [Feature]Detail.tsx
+```
+
+**Implementation order:**
+1. Create page routes first
+2. Create list component
+3. Create individual item components
+4. Create form component
+5. Wire everything together
+
+**Example: Complete List Component with Filtering**
+```tsx
+// src/components/contracts/ContractList.tsx
+'use client';
+
+import { useState } from 'react';
+import { useContracts } from '@/lib/queries/contracts';
+import { ContractCard } from './ContractCard';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import { Loader2, Plus, Search, X } from 'lucide-react';
+import Link from 'next/link';
+import type { Database } from '@/types/database.types';
+
+type Contract = Database['public']['Tables']['contracts']['Row'];
+type Status = Contract['status'];
+
+interface ContractListProps {
+  initialStatus?: Status;
+}
+
+export function ContractList({ initialStatus }: ContractListProps) {
+  const [status, setStatus] = useState<Status | undefined>(initialStatus);
+  const [search, setSearch] = useState('');
+  
+  const { data: contracts, isLoading, error, refetch } = useContracts({ status });
+
+  // Client-side search filtering
+  const filteredContracts = contracts?.filter((contract) => {
+    if (!search) return true;
+    const searchLower = search.toLowerCase();
+    return (
+      contract.title.toLowerCase().includes(searchLower) ||
+      contract.description?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const clearFilters = () => {
+    setStatus(undefined);
+    setSearch('');
+  };
+
+  const hasFilters = status || search;
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">
+            <p className="text-destructive mb-4">
+              Error loading contracts: {error.message}
+            </p>
+            <Button variant="outline" onClick={() => refetch()}>
+              Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search contracts..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select
+          value={status ?? 'all'}
+          onValueChange={(value) => setStatus(value === 'all' ? undefined : value as Status)}
+        >
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+        {hasFilters && (
+          <Button variant="ghost" onClick={clearFilters}>
+            <X className="h-4 w-4 mr-2" />
+            Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && !filteredContracts?.length && (
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground mb-4">
+              {hasFilters ? 'No contracts match your filters' : 'No contracts found'}
+            </p>
+            <div className="flex justify-center gap-2">
+              {hasFilters && (
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear Filters
+                </Button>
+              )}
+              <Button asChild>
+                <Link href="/contracts/new">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Contract
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Contract Grid */}
+      {!isLoading && filteredContracts && filteredContracts.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredContracts.map((contract) => (
+            <ContractCard key={contract.id} contract={contract} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+**Verification:**
+```bash
+# Run dev server and test
+npm run dev
+
+# Build for production
+npm run build
+```
+
+### Phase 4: Integration
+
+**Focus areas:**
+1. Connect all components
+2. Add navigation links
+3. Implement optimistic updates
+4. Add toast notifications
+5. Handle edge cases
+
+**Example: Optimistic Update**
+```typescript
+// In query hooks
+export function useDeleteContract() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const result = await deleteContract(id);
+      if (result.error) throw new Error(result.error.message);
+      return result.data;
+    },
+    onMutate: async (deletedId) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: contractKeys.lists() });
+
+      // Snapshot previous value
+      const previousContracts = queryClient.getQueryData(contractKeys.lists());
+
+      // Optimistically update
+      queryClient.setQueryData(contractKeys.lists(), (old: Contract[] | undefined) =>
+        old?.filter((contract) => contract.id !== deletedId)
+      );
+
+      return { previousContracts };
+    },
+    onError: (err, deletedId, context) => {
+      // Rollback on error
+      queryClient.setQueryData(contractKeys.lists(), context?.previousContracts);
+    },
+    onSettled: () => {
+      // Refetch after mutation
+      queryClient.invalidateQueries({ queryKey: contractKeys.lists() });
+    },
+  });
+}
+```
+
+## Error Handling
+
+If `npm run build` fails:
+1. Read the error message carefully
+2. Fix the specific issue
+3. Re-run build
+4. Do NOT proceed until build passes
+
+Common issues:
+- Missing imports
+- Type mismatches (regenerate types: `npm run update-types`)
+- Undefined variables
+- Missing dependencies
+
+## Commit Convention
+After each successful phase:
+```bash
+git add .
+git commit -m "feat([feature-name]): complete [phase-number]-[phase-name]"
+```
+
+Example:
+```bash
+git commit -m "feat(contracts): complete 01-db-updates"
+git commit -m "feat(contracts): complete 02-api-updates"
+git commit -m "feat(contracts): complete 03-ui-components"
+```
+
+## Context Preservation
+
+When stopping after implementing a step:
+1. Ensure the phase file is updated with status and notes
+2. Ensure `00-index.md` reflects current state
+3. Commit all changes
+
+To resume:
+1. Read `docs/[feature-name]/00-index.md` 
+2. Identify the next pending phase
+3. Read that phase file
+4. Continue implementation
+
+## Output Checklist
+After implementing a step:
+- [ ] All planned changes completed
+- [ ] Verification checklist passed
+- [ ] `npm run build` succeeds
+- [ ] Phase file updated with implementation notes
+- [ ] `00-index.md` updated with status and commit hash
+- [ ] Changes committed with proper message

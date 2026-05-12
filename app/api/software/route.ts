@@ -300,7 +300,7 @@ export async function GET(request: NextRequest) {
     const groupedSoftware = Array.from(softwareMap.values()).map(sw => ({
       name: sw.name,
       publisher: sw.publisher,
-      versions: Array.from(sw.versions.values()).map(v => ({
+      versions: Array.from(sw.versions.values()).map((v: any) => ({
         version: v.version,
         deviceCount: v.devices.length,
         devices: v.devices

@@ -1,0 +1,149 @@
+---
+description: Shadcn/ui component usage and patterns
+globs: ["**/components/**/*.tsx", "**/app/**/*.tsx"]
+---
+
+# Shadcn/ui Guidelines
+
+## Why Shadcn/ui?
+- Components are COPIED into your repo (not installed as a library)
+- AI agents can READ and MODIFY the component code directly
+- No need to consult external documentation
+
+## Component Location
+- All Shadcn components live in `components/ui/`
+- Custom components live in `components/`
+- Never modify `components/ui/` files directly — customize via props or wrapper components
+
+## Styling with cn()
+Always use the `cn()` utility for conditional classes:
+```tsx
+import { cn } from '@/lib/utils';
+
+<div className={cn(
+  "base-classes",
+  isActive && "active-classes",
+  variant === "destructive" && "text-destructive"
+)} />
+```
+
+## Common Components
+
+### Button
+Use variants: default, destructive, outline, secondary, ghost, link
+```tsx
+import { Button } from '@/components/ui/button';
+
+<Button variant="default">Primary</Button>
+<Button variant="destructive">Delete</Button>
+<Button variant="outline">Cancel</Button>
+<Button variant="ghost">Subtle</Button>
+```
+
+### Card
+```tsx
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+
+<Card>
+  <CardHeader>
+    <CardTitle>Title</CardTitle>
+    <CardDescription>Description</CardDescription>
+  </CardHeader>
+  <CardContent>Content here</CardContent>
+  <CardFooter>Footer actions</CardFooter>
+</Card>
+```
+
+### Table
+```tsx
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+
+<Table>
+  <TableHeader>
+    <TableRow>
+      <TableHead>Column</TableHead>
+    </TableRow>
+  </TableHeader>
+  <TableBody>
+    <TableRow>
+      <TableCell>Data</TableCell>
+    </TableRow>
+  </TableBody>
+</Table>
+```
+
+### Form Inputs
+```tsx
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+<div className="space-y-2">
+  <Label htmlFor="name">Name</Label>
+  <Input id="name" placeholder="Enter name" />
+</div>
+```
+
+### Dialog (Modal)
+```tsx
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+
+<Dialog>
+  <DialogTrigger asChild>
+    <Button>Open</Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Modal Title</DialogTitle>
+    </DialogHeader>
+    {/* Content */}
+  </DialogContent>
+</Dialog>
+```
+
+### Toast Notifications
+```tsx
+import { useToast } from '@/components/ui/use-toast';
+
+const { toast } = useToast();
+
+toast({
+  title: "Success",
+  description: "Operation completed",
+});
+```
+
+## Icons
+Always use Lucide React:
+```tsx
+import { Loader2, Check, X, ChevronRight, Plus, Trash2, Edit, Search } from 'lucide-react';
+
+// Loading spinner
+<Loader2 className="h-4 w-4 animate-spin" />
+
+// In buttons
+<Button>
+  <Plus className="h-4 w-4 mr-2" />
+  Add Item
+</Button>
+```
+
+## Loading States
+Use Loader2 with animate-spin for consistent loading indicators:
+```tsx
+if (isLoading) {
+  return (
+    <div className="flex items-center justify-center p-8">
+      <Loader2 className="h-6 w-6 animate-spin" />
+    </div>
+  );
+}
+```
+
+## Responsive Patterns
+Use Tailwind breakpoints with Shadcn components:
+```tsx
+<Card className="w-full md:w-1/2 lg:w-1/3">
+  {/* Responsive card */}
+</Card>
+```

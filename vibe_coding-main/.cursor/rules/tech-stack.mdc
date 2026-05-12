@@ -1,0 +1,134 @@
+---
+description: AI-native tech stack for Next.js, Supabase, Shadcn/ui, TanStack Query, and Zod
+globs: ["**/*.ts", "**/*.tsx"]
+---
+
+# AI-Native Tech Stack
+
+This project uses an AI-optimized stack prioritizing Type Safety, Utility-first CSS, and Modular Architecture.
+
+## Stack Summary
+- **Framework:** Next.js 14+ with App Router and TypeScript (strict)
+- **Styling:** Tailwind CSS + Shadcn/ui components
+- **Icons:** Lucide React
+- **Database:** Supabase (PostgreSQL)
+- **Data Fetching:** TanStack Query (React Query)
+- **Forms:** React Hook Form + Zod validation
+- **Types:** Auto-generated from Supabase schema
+
+## TypeScript
+- TypeScript is NON-NEGOTIABLE — it catches errors between Replit and Cursor
+- Always use strict mode
+- Import Database types from `@/types/database.types`
+- Never use `any` — define proper types
+
+## Supabase
+
+### Client Configuration
+- Always use environment variables for SUPABASE_URL and SUPABASE_ANON_KEY
+- Never expose service_role key in client-side code
+- Create a typed client in `lib/supabase.ts`
+- Use the @supabase/supabase-js library with Database generic
+
+### Type Generation (Critical!)
+Run `npm run update-types` after any database schema change:
+```bash
+supabase gen types typescript --project-id <id> > types/database.types.ts
+```
+This ensures Replit Agent sees your actual database columns.
+
+### Security
+- Use Row Level Security (RLS) for all tables
+- Define policies for SELECT, INSERT, UPDATE, DELETE separately
+- Test RLS policies with different user contexts
+- Never bypass RLS in client code
+
+### Queries
+- Use the Supabase client methods (.select(), .insert(), etc.)
+- Handle loading and error states for all database operations
+- Use .single() when expecting one result
+- Use .maybeSingle() when result might not exist
+
+### Example Pattern
+```typescript
+// Good: Using typed Supabase client with error handling
+import { supabase } from '@/lib/supabase';
+import type { Database } from '@/types/database.types';
+
+type Contract = Database['public']['Tables']['contracts']['Row'];
+
+const fetchContracts = async (status: string): Promise<Contract[]> => {
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .eq('status', status);
+
+  if (error) {
+    console.error('Error fetching contracts:', error);
+    return [];
+  }
+  return data ?? [];
+};
+```
+
+## Next.js / Frontend
+
+### App Router
+- Use the App Router (`app/` directory) for routing
+- Use Server Components by default, add 'use client' only when needed
+- Place API routes in `app/api/` directory
+- Use `loading.tsx` and `error.tsx` for loading/error states
+
+### Shadcn/ui Components
+- Components live in `components/ui/` — they're copied into the repo
+- AI can read and modify these directly (unlike external libraries)
+- Use the `cn()` utility from `lib/utils.ts` for conditional classes
+- Import icons from `lucide-react`
+
+### TanStack Query (React Query)
+- Use for all client-side data fetching
+- Define query hooks in `lib/queries.ts`
+- Use `useQuery` for fetching, `useMutation` for updates
+- Implement optimistic updates for better UX
+- The benefit: Easy to swap mock data for Supabase fetches
+
+### React Hook Form + Zod
+- Define Zod schemas in `schemas/` directory
+- Use schemas for both UI validation and database validation
+- Integrate with React Hook Form using `@hookform/resolvers/zod`
+
+### Components
+- Use functional components with hooks
+- Keep components small and focused
+- Extract reusable logic into custom hooks
+- All components must be TypeScript
+
+### Data Fetching
+- Prefer Server Components for initial data fetching
+- Use TanStack Query for client-side fetching with caching
+- Always handle loading, success, and error states
+- Display user-friendly error messages
+
+## Environment Variables
+
+### Configuration
+- Use .env.local for local development
+- Never commit .env files to git
+- Document required env vars in README or .env.example
+- Prefix client-side vars with `NEXT_PUBLIC_` for Next.js
+
+### Required Variables
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### Access Pattern
+```typescript
+// Client components
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// Server components / API routes (no prefix needed)
+const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+```
