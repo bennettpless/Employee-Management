@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import SessionWrapper from '@/components/SessionWrapper'
+import AppHeader from '@/components/AppHeader'
 import './globals.css'
 
 // Use system font to avoid startup hang from next/font/google fetch
@@ -16,7 +18,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={fontClass}>{children}</body>
+      <body className={fontClass}>
+        <SessionWrapper>
+          <AppHeader />
+          {children}
+        </SessionWrapper>
+      </body>
     </html>
   )
 }

@@ -27,6 +27,19 @@ export async function getGraphClient() {
   })
 }
 
+/**
+ * Fetch a Graph API endpoint and return the parsed JSON.
+ * Accepts relative paths (e.g. `/deviceManagement/managedDevices?$top=100`)
+ * or full @odata.nextLink URLs.
+ */
+export async function graphFetch(urlOrPath: string): Promise<Record<string, unknown>> {
+  const client = await getGraphClient()
+  const path = urlOrPath.startsWith('https://')
+    ? urlOrPath.replace('https://graph.microsoft.com/v1.0', '')
+    : urlOrPath
+  return client.api(path).get()
+}
+
 export interface AzureUser {
   id: string
   userPrincipalName: string

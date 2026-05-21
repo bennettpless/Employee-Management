@@ -9,10 +9,12 @@ const requiredServerVars = [
   'SHAREPOINT_FILE_PATH',
   'NINJA_CLIENT_ID',
   'NINJA_CLIENT_SECRET',
+  'NEXTAUTH_SECRET',
 ] as const
 
 const optionalServerVars = [
   'NINJA_REGION',
+  'NEXTAUTH_URL',
 ] as const
 
 export function validateEnv() {
