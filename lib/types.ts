@@ -33,6 +33,8 @@ export interface Device {
   os_version: string | null
   last_seen: string | null
   status: 'active' | 'inactive' | 'retired'
+  azure_device_id: string | null
+  is_in_ninja: boolean
   last_synced_at: string
   created_at: string
   updated_at: string
@@ -81,7 +83,7 @@ export interface LicenseAssignment {
 
 export interface SyncLog {
   id: string
-  sync_type: 'entra_id' | 'ninjaone' | 'excel'
+  sync_type: 'entra_id' | 'ninjaone' | 'intune' | 'excel'
   status: 'success' | 'partial' | 'failed'
   records_synced: number
   records_failed: number

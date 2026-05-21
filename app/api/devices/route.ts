@@ -111,7 +111,17 @@ export async function GET(request: NextRequest) {
       return nameA.localeCompare(nameB)
     })
 
-    return NextResponse.json({ devices: deduplicatedDevices })
+    const allDeduped = Array.from(deviceMapBySerial.values())
+    const counts = {
+      all: allDeduped.length,
+      inNinja: allDeduped.filter((d: any) => d.is_in_ninja === true).length,
+      inAzure: allDeduped.filter((d: any) => !!d.azure_device_id).length,
+      ninjaOnly: allDeduped.filter((d: any) => d.is_in_ninja === true && !d.azure_device_id).length,
+      azureOnly: allDeduped.filter((d: any) => d.azure_device_id && d.is_in_ninja === false).length,
+      inBoth: allDeduped.filter((d: any) => d.is_in_ninja === true && !!d.azure_device_id).length,
+    }
+
+    return NextResponse.json({ devices: deduplicatedDevices, counts })
   } catch (error: any) {
     console.error('Error fetching devices:', error)
     return NextResponse.json(

@@ -10,6 +10,7 @@ export default function DevicesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState<'all' | 'ninja-only' | 'azure-only'>('all')
+  const [counts, setCounts] = useState<{ all: number; inNinja: number; inAzure: number; ninjaOnly: number; azureOnly: number; inBoth: number }>({ all: 0, inNinja: 0, inAzure: 0, ninjaOnly: 0, azureOnly: 0, inBoth: 0 })
   const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => {
@@ -24,6 +25,9 @@ export default function DevicesPage() {
       const response = await fetch(url)
       const data = await response.json()
       setDevices(data.devices || [])
+      if (data.counts) {
+        setCounts(data.counts)
+      }
     } catch (error) {
       console.error('Error fetching devices:', error)
     } finally {
@@ -73,7 +77,14 @@ export default function DevicesPage() {
             Back to Home
           </Link>
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Devices</h1>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              Devices
+              {!loading && (
+                <span className="ml-3 text-2xl font-normal text-gray-500">
+                  ({filteredDevices.length}{searchTerm ? ` of ${counts.all}` : ''})
+                </span>
+              )}
+            </h1>
             <p className="text-gray-600">All devices synced from NinjaOne and Azure</p>
           </div>
         </div>
@@ -135,6 +146,11 @@ export default function DevicesPage() {
                   }`}
                 >
                   All Devices
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+                    filterType === 'all' ? 'bg-blue-400 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {counts.all}
+                  </span>
                 </button>
                 <button
                   onClick={() => setFilterType('ninja-only')}
@@ -145,18 +161,33 @@ export default function DevicesPage() {
                   }`}
                 >
                   NinjaOne Only
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+                    filterType === 'ninja-only' ? 'bg-green-400 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {counts.ninjaOnly}
+                  </span>
                 </button>
                 <button
                   onClick={() => setFilterType('azure-only')}
                   className={`px-4 py-2 rounded-lg border transition-colors ${
                     filterType === 'azure-only'
-                      ? 'bg-orange-500 text-white border-orange-500'
+                      ? 'bg-orange-400 text-white border-orange-500'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  Azure Only
+                  Intune Only
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+                    filterType === 'azure-only' ? 'bg-orange-300 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {counts.azureOnly}
+                  </span>
                 </button>
               </div>
+              {counts.inBoth > 0 && (
+                <p className="mt-3 text-xs text-gray-500">
+                  {counts.inBoth} device{counts.inBoth !== 1 ? 's' : ''} exist in both NinjaOne and Intune
+                </p>
+              )}
             </div>
           )}
         </div>

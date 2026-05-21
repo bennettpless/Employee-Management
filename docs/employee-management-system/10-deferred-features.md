@@ -7,15 +7,9 @@ Features that are referenced in the schema, BRD, or README but were explicitly d
 
 ## Planned Changes
 
-### Ticketing
-- [ ] Create `app/tickets/page.tsx` — ticket list view
-- [ ] Create `app/tickets/[id]/page.tsx` — ticket detail view
-- [ ] Create `GET /api/tickets` — list tickets with filters
-- [ ] Create `GET /api/tickets/[id]` — ticket detail
-- [ ] Wire NinjaOne `getTickets()` to populate `tickets` table during sync
-- [ ] Add ticket link on employee detail page
+### ~~Ticketing~~ — Replaced by Phase 11 (IT Response Agent)
 
-**Context:** The `tickets` table exists in `schema.sql` and `getTickets()` exists in `lib/ninjaone.ts`, but no API routes or UI consume them.
+Ticketing functionality is now covered by the IT Response Agent integration (Phase 11). The IT Response Agent syncs tickets from NinjaOne, generates AI recommendations, and provides a full review/forward workflow. The `tickets` table in `schema.sql` will be retained for use by the IT Response Agent.
 
 ### Azure Entra ID Sync
 - [ ] Add Entra ID as alternative/supplementary employee source
@@ -41,7 +35,7 @@ Features that are referenced in the schema, BRD, or README but were explicitly d
 - [ ] Audit log for user actions (who changed what, when)
 
 ## Open Questions
-- [ ] Is ticketing still a desired feature, or should the `tickets` table be removed?
+- [x] Is ticketing still a desired feature, or should the `tickets` table be removed? — **Resolved: tickets table retained; ticketing replaced by IT Response Agent (Phase 11)**
 - [ ] Is Entra ID sync still planned, or is Excel sufficient long-term?
 - [ ] Should CI/CD be prioritized before other deferred features?
 

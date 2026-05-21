@@ -10,6 +10,12 @@ export default function SyncPage() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [seeding, setSeeding] = useState(false)
+  const [seedResult, setSeedResult] = useState<any>(null)
+  const [intuneSync, setIntuneSync] = useState(false)
+  const [intuneResult, setIntuneResult] = useState<any>(null)
+  const [assigning, setAssigning] = useState(false)
+  const [assignResult, setAssignResult] = useState<any>(null)
 
   useEffect(() => {
     fetchSyncLogs()
@@ -75,6 +81,76 @@ export default function SyncPage() {
     }
   }
 
+  const handleIntuneSync = async () => {
+    if (intuneSync) return
+    setIntuneSync(true)
+    setIntuneResult(null)
+
+    try {
+      const response = await fetch('/api/sync/intune', { method: 'POST' })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to sync from Intune')
+      }
+
+      setIntuneResult(result)
+      await fetchSyncLogs()
+    } catch (error: any) {
+      console.error('Error syncing Intune:', error)
+      alert(`Intune sync failed: ${error.message}`)
+    } finally {
+      setIntuneSync(false)
+    }
+  }
+
+  const handleSeedFromExcel = async () => {
+    if (seeding) return
+    if (!confirm('This will DELETE ALL DATA in the database and re-import from the Excel sheet. Are you sure?')) return
+
+    setSeeding(true)
+    setSeedResult(null)
+
+    try {
+      const response = await fetch('/api/seed/from-excel', { method: 'POST' })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to seed from Excel')
+      }
+
+      setSeedResult(result)
+      await fetchSyncLogs()
+    } catch (error: any) {
+      console.error('Error seeding from Excel:', error)
+      alert(`Seed failed: ${error.message}`)
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  const handleAssignDevices = async () => {
+    if (assigning) return
+    setAssigning(true)
+    setAssignResult(null)
+
+    try {
+      const response = await fetch('/api/devices/assign-from-excel', { method: 'POST' })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to assign devices')
+      }
+
+      setAssignResult(result)
+    } catch (error: any) {
+      console.error('Error assigning devices:', error)
+      alert(`Assignment failed: ${error.message}`)
+    } finally {
+      setAssigning(false)
+    }
+  }
+
   const getSyncIcon = (status: string) => {
     switch (status) {
       case 'success':
@@ -100,7 +176,49 @@ export default function SyncPage() {
             Back to Home
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Data Synchronization</h1>
-          <p className="text-gray-600">Sync device and software data from NinjaOne</p>
+          <p className="text-gray-600">Sync device and software data from NinjaOne and Intune</p>
+        </div>
+
+        {/* Seed from Excel */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8 border-l-4 border-red-500">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Seed from Excel</h3>
+            <p className="text-sm text-gray-600">
+              Wipe the entire database and re-import all employees from the SharePoint Excel sheet 
+              (&quot;Master Employee List&quot;). Run NinjaOne sync afterward to populate device details.
+            </p>
+          </div>
+          <button
+            onClick={handleSeedFromExcel}
+            disabled={seeding || syncing}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors font-medium text-lg"
+          >
+            {seeding ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Seeding from Excel...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-5 h-5" />
+                Wipe &amp; Seed from Excel
+              </>
+            )}
+          </button>
+          {seedResult && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-sm">
+              <p className="font-semibold text-green-800 mb-1">Seed complete ({seedResult.duration}s)</p>
+              <ul className="text-green-700 space-y-1">
+                <li>Excel rows read: {seedResult.stats?.excelRows}</li>
+                <li>Employees created: {seedResult.stats?.employees}</li>
+                <li>Devices created: {seedResult.stats?.devices}</li>
+                <li>Licenses recorded: {seedResult.stats?.licenses}</li>
+                {seedResult.stats?.errors > 0 && (
+                  <li className="text-red-600">Errors: {seedResult.stats.errors}</li>
+                )}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* NinjaOne Sync Button */}
@@ -131,6 +249,134 @@ export default function SyncPage() {
           </button>
         </div>
 
+        {/* Intune/Entra Sync */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8 border-l-4 border-teal-500">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Sync from Intune / Entra</h3>
+            <p className="text-sm text-gray-600">
+              Pull managed devices from Microsoft Intune that are not in NinjaOne. Automatically
+              assigns devices to employees using the Intune user principal name. Run this after
+              NinjaOne sync to fill in remaining gaps.
+            </p>
+          </div>
+          <button
+            onClick={handleIntuneSync}
+            disabled={intuneSync || syncing || seeding}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:bg-gray-400 transition-colors font-medium text-lg"
+          >
+            {intuneSync ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Syncing from Intune...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-5 h-5" />
+                Sync from Intune / Entra
+              </>
+            )}
+          </button>
+          {intuneResult && (
+            <div className="mt-4 p-4 bg-teal-50 border border-teal-200 rounded-lg text-sm">
+              <p className="font-semibold text-teal-800 mb-1">
+                Intune sync complete ({intuneResult.duration}s)
+              </p>
+              <ul className="text-teal-700 space-y-1">
+                <li>Total Intune devices: {intuneResult.totalIntuneDevices}</li>
+                <li>Synced/updated: {intuneResult.recordsSynced}</li>
+                <li>Skipped (duplicates): {intuneResult.recordsSkipped}</li>
+                {intuneResult.recordsNonCompliant > 0 && (
+                  <li className="text-amber-600">
+                    Non-compliant (excluded): {intuneResult.recordsNonCompliant}
+                  </li>
+                )}
+                <li>Employees auto-matched: {intuneResult.employeesMatched}</li>
+                {intuneResult.recordsFailed > 0 && (
+                  <li className="text-red-600">Failed: {intuneResult.recordsFailed}</li>
+                )}
+              </ul>
+              {intuneResult.errors && intuneResult.errors.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-red-600 font-medium">
+                    View errors ({intuneResult.errors.length})
+                  </summary>
+                  <ul className="mt-1 text-xs text-gray-700 space-y-0.5 max-h-40 overflow-y-auto">
+                    {intuneResult.errors.map((e: string, i: number) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Assign Devices from Excel */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8 border-l-4 border-indigo-500">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Assign Devices from Excel</h3>
+            <p className="text-sm text-gray-600">
+              Match NinjaOne devices to employees using the &quot;PC Names Active / Enrolled&quot; column 
+              from Excel. Run this after NinjaOne sync to link devices to their owners.
+            </p>
+          </div>
+          <button
+            onClick={handleAssignDevices}
+            disabled={assigning || syncing || seeding}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 transition-colors font-medium text-lg"
+          >
+            {assigning ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Assigning Devices...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-5 h-5" />
+                Assign Devices from Excel
+              </>
+            )}
+          </button>
+          {assignResult && (
+            <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-sm">
+              <p className="font-semibold text-indigo-800 mb-1">
+                Assignment complete ({assignResult.duration}s)
+              </p>
+              <ul className="text-indigo-700 space-y-1">
+                <li>Devices matched: {assignResult.stats?.matched}</li>
+                <li>Already assigned: {assignResult.stats?.alreadyAssigned}</li>
+                {assignResult.stats?.unmatched > 0 && (
+                  <li className="text-amber-600">Unmatched names: {assignResult.stats.unmatched}</li>
+                )}
+              </ul>
+              {assignResult.assignments && assignResult.assignments.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-indigo-600 font-medium">
+                    View assignments ({assignResult.assignments.length})
+                  </summary>
+                  <ul className="mt-1 text-xs text-gray-700 space-y-0.5 max-h-40 overflow-y-auto">
+                    {assignResult.assignments.map((a: string, i: number) => (
+                      <li key={i}>{a}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {assignResult.unmatchedNames && assignResult.unmatchedNames.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-amber-600 font-medium">
+                    View unmatched ({assignResult.unmatchedNames.length})
+                  </summary>
+                  <ul className="mt-1 text-xs text-gray-700 space-y-0.5 max-h-40 overflow-y-auto">
+                    {assignResult.unmatchedNames.map((n: string, i: number) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Sync History */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Sync History</h2>
@@ -153,7 +399,7 @@ export default function SyncPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-1">
                           <h4 className="font-semibold text-gray-900">
-                            {log.sync_type === 'ninjaone' ? 'NinjaOne' : log.sync_type.toUpperCase()}
+                            {log.sync_type === 'ninjaone' ? 'NinjaOne' : log.sync_type === 'intune' ? 'Intune / Entra' : log.sync_type.toUpperCase()}
                           </h4>
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                             log.status === 'success' ? 'bg-green-100 text-green-800' :

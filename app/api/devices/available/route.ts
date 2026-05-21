@@ -3,7 +3,7 @@ import { getServiceSupabase } from '@/lib/supabase'
 
 /**
  * GET /api/devices/available?search=...&include_assigned=false
- * Returns devices available for assignment (from NinjaOne sync).
+ * Returns devices available for assignment (from NinjaOne or Intune sync).
  * Used by the DevicePicker component.
  */
 export async function GET(request: NextRequest) {
@@ -16,8 +16,8 @@ export async function GET(request: NextRequest) {
     
     let query = supabase
       .from('devices')
-      .select('id, device_name, device_type, manufacturer, model, serial_number, os_name, is_in_ninja, employee_id')
-      .eq('is_in_ninja', true)
+      .select('id, device_name, device_type, manufacturer, model, serial_number, os_name, is_in_ninja, azure_device_id, employee_id')
+      .or('is_in_ninja.eq.true,azure_device_id.not.is.null')
       .order('device_name', { ascending: true })
       .limit(50)
     
