@@ -28,7 +28,7 @@
 
 | Phase | File | Status | Commit |
 |-------|------|--------|--------|
-| 12. Remove Software + Licenses | [12-software-licenses-removal.md](./12-software-licenses-removal.md) | ✅ Complete | _pending commit_ |
+| 12. Remove Software + Licenses | [12-software-licenses-removal.md](./12-software-licenses-removal.md) | ✅ Complete | 508bc0a |
 | 13. Network Schema + Offices Admin | [13-network-schema.md](./13-network-schema.md) | ⬜ Pending | — |
 | 14. Network Inventory (Manual + Import) | [14-network-inventory.md](./14-network-inventory.md) | ⬜ Pending | — |
 | 15. Geographic Office Map | [15-network-geo-map.md](./15-network-geo-map.md) | ⬜ Pending | — |
@@ -124,4 +124,4 @@ The core v1 application is built and functional (Phases 1-9 and Phase 11 are com
 - [ ] Topology source-of-truth conflict — when a manual edge contradicts an Auvik-discovered link on the same two devices, which wins? Default plan: Auvik for non-overridden devices, manual otherwise.
 - [ ] Auvik cron frequency — daily 04:00 UTC matches NinjaOne; do we need more frequent sync (e.g., every 6h)?
 - [ ] Office geocoding — OK to use OpenStreetMap Nominatim (free, attribution required), or stick with manual lat/lng entry?
-- [ ] NinjaOne software pull — with the Software tab gone, should NinjaOne sync still pull software data (it currently does) or skip it for performance?
+- [x] NinjaOne software pull — with the Software tab gone, should NinjaOne sync still pull software data (it currently does) or skip it for performance? → **Skipped** (Phase 12) — `getDeviceSoftware()` and the `software`/`device_software` writes were removed from the NinjaOne sync, since the underlying tables are dropped in `02_drop_software_and_licenses.sql`.
