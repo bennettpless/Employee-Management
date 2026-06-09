@@ -89,7 +89,6 @@ describe('mapExcelRowToEmployee', () => {
     expect(result.first_name).toBeNull()
     expect(result.last_name).toBeNull()
     expect(result.devices).toEqual([])
-    expect(result.softwareLicenses).toEqual([])
     expect(result.employment_status).toBe('active')
   })
 
@@ -173,80 +172,6 @@ describe('mapExcelRowToEmployee', () => {
     })
   })
 
-  describe('software license detection', () => {
-    it('detects "Yes" as a license', () => {
-      const result = mapExcelRowToEmployee(
-        buildRow({ [EXCEL_COLUMNS.AUTOCAD]: 'Yes' })
-      )
-      expect(result.softwareLicenses).toContainEqual({
-        software_name: EXCEL_COLUMNS.AUTOCAD,
-        has_license: true,
-      })
-    })
-
-    it('detects "Y" as a license', () => {
-      const result = mapExcelRowToEmployee(
-        buildRow({ [EXCEL_COLUMNS.BIM]: 'Y' })
-      )
-      expect(result.softwareLicenses).toContainEqual({
-        software_name: EXCEL_COLUMNS.BIM,
-        has_license: true,
-      })
-    })
-
-    it('detects boolean true as a license', () => {
-      const result = mapExcelRowToEmployee(
-        buildRow({ [EXCEL_COLUMNS.HILTI]: true })
-      )
-      expect(result.softwareLicenses).toContainEqual({
-        software_name: EXCEL_COLUMNS.HILTI,
-        has_license: true,
-      })
-    })
-
-    it('detects "1" and numeric 1 as licenses', () => {
-      const result = mapExcelRowToEmployee(
-        buildRow({
-          [EXCEL_COLUMNS.RISA]: '1',
-          [EXCEL_COLUMNS.LUCID]: 1,
-        })
-      )
-      expect(result.softwareLicenses).toContainEqual({
-        software_name: EXCEL_COLUMNS.RISA,
-        has_license: true,
-      })
-      expect(result.softwareLicenses).toContainEqual({
-        software_name: EXCEL_COLUMNS.LUCID,
-        has_license: true,
-      })
-    })
-
-    it('ignores empty, null, and "No" values', () => {
-      const result = mapExcelRowToEmployee(
-        buildRow({
-          [EXCEL_COLUMNS.AUTOCAD]: '',
-          [EXCEL_COLUMNS.BIM]: null,
-          [EXCEL_COLUMNS.HILTI]: 'No',
-        })
-      )
-      const names = result.softwareLicenses.map((l: any) => l.software_name)
-      expect(names).not.toContain(EXCEL_COLUMNS.AUTOCAD)
-      expect(names).not.toContain(EXCEL_COLUMNS.BIM)
-      expect(names).not.toContain(EXCEL_COLUMNS.HILTI)
-    })
-
-    it('detects multiple licenses at once', () => {
-      const result = mapExcelRowToEmployee(
-        buildRow({
-          [EXCEL_COLUMNS.AUTOCAD]: 'Yes',
-          [EXCEL_COLUMNS.ETABS]: 'Yes',
-          [EXCEL_COLUMNS.BENTLEY]: 'Y',
-        })
-      )
-      expect(result.softwareLicenses).toHaveLength(3)
-    })
-  })
-
   describe('boolean flags', () => {
     it('maps "Yes" to true for enrolled_in_intune', () => {
       const result = mapExcelRowToEmployee(
@@ -300,7 +225,6 @@ describe('mapEmployeeToExcelRow', () => {
     office_365_mfa: true,
     duplicate_user_email: '',
     devices: [] as any[],
-    software_licenses: [] as any[],
     excel_data: null as any,
   }
 
@@ -343,18 +267,6 @@ describe('mapEmployeeToExcelRow', () => {
     expect(row[EXCEL_COLUMNS.PC_TYPE]).toBe('Desktop, Laptop')
   })
 
-  it('maps software_licenses to Yes/No columns', () => {
-    const row = mapEmployeeToExcelRow({
-      ...baseEmployee,
-      software_licenses: [
-        { software_name: EXCEL_COLUMNS.AUTOCAD, has_license: true },
-        { software_name: EXCEL_COLUMNS.BIM, has_license: false },
-      ],
-    })
-    expect(row[EXCEL_COLUMNS.AUTOCAD]).toBe('Yes')
-    expect(row[EXCEL_COLUMNS.BIM]).toBe('No')
-  })
-
   it('preserves Employee ID from excel_data', () => {
     const row = mapEmployeeToExcelRow({
       ...baseEmployee,
@@ -381,17 +293,11 @@ describe('round-trip mapping', () => {
     const originalRow = buildRow({
       [EXCEL_COLUMNS.PC_NAMES_ACTIVE_ENROLLED]: 'PC-001, PC-002',
       [EXCEL_COLUMNS.PC_TYPE]: 'Desktop, Laptop',
-      [EXCEL_COLUMNS.AUTOCAD]: 'Yes',
-      [EXCEL_COLUMNS.BIM]: 'Yes',
     })
 
     const employee = mapExcelRowToEmployee(originalRow)
 
-    const employeeForExcel = {
-      ...employee,
-      software_licenses: employee.softwareLicenses,
-    }
-    const roundTripped = mapEmployeeToExcelRow(employeeForExcel)
+    const roundTripped = mapEmployeeToExcelRow(employee)
 
     expect(roundTripped[EXCEL_COLUMNS.FIRST_NAME]).toBe('Jane')
     expect(roundTripped[EXCEL_COLUMNS.LAST_NAME]).toBe('Doe')

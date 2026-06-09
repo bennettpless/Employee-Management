@@ -181,7 +181,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">NinjaOne</h3>
-                <p className="text-sm text-gray-600">Device management and software inventory</p>
+                <p className="text-sm text-gray-600">Device hardware and OS sync</p>
               </div>
             </div>
             <div className="space-y-2 text-sm">

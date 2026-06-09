@@ -45,25 +45,6 @@ CREATE TABLE devices (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Software catalog (unique software entries)
-CREATE TABLE software (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(255) NOT NULL,
-    version VARCHAR(100),
-    publisher VARCHAR(255),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(name, version, publisher)
-);
-
--- Device software junction table (many-to-many)
-CREATE TABLE device_software (
-    device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
-    software_id UUID REFERENCES software(id) ON DELETE CASCADE,
-    install_date DATE,
-    last_synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    PRIMARY KEY (device_id, software_id)
-);
-
 -- Tickets table (can be synced from various ticket systems)
 CREATE TABLE tickets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -80,36 +61,6 @@ CREATE TABLE tickets (
     resolved_date TIMESTAMP WITH TIME ZONE,
     last_synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Licenses table for software license management
-CREATE TABLE licenses (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    software_name VARCHAR(255) NOT NULL,
-    license_type VARCHAR(100), -- subscription, perpetual, trial
-    license_key TEXT,
-    total_seats INTEGER,
-    used_seats INTEGER DEFAULT 0,
-    vendor VARCHAR(255),
-    purchase_date DATE,
-    expiration_date DATE,
-    cost DECIMAL(10, 2),
-    billing_frequency VARCHAR(50), -- monthly, annually, one-time
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- License assignments
-CREATE TABLE license_assignments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    license_id UUID REFERENCES licenses(id) ON DELETE CASCADE,
-    employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
-    assigned_date DATE DEFAULT CURRENT_DATE,
-    revoked_date DATE,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(license_id, employee_id)
 );
 
 -- Sync logs to track data synchronization
@@ -135,8 +86,6 @@ CREATE INDEX idx_devices_employee_id ON devices(employee_id);
 CREATE INDEX idx_devices_ninja_id ON devices(ninja_device_id);
 CREATE INDEX idx_tickets_employee_id ON tickets(employee_id);
 CREATE INDEX idx_tickets_status ON tickets(status);
-CREATE INDEX idx_license_assignments_employee ON license_assignments(employee_id);
-CREATE INDEX idx_license_assignments_license ON license_assignments(license_id);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -154,25 +103,14 @@ CREATE TRIGGER update_employees_updated_at BEFORE UPDATE ON employees
 CREATE TRIGGER update_devices_updated_at BEFORE UPDATE ON devices
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_licenses_updated_at BEFORE UPDATE ON licenses
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 -- Row Level Security (RLS) Policies
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE devices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE software ENABLE ROW LEVEL SECURITY;
-ALTER TABLE device_software ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE licenses ENABLE ROW LEVEL SECURITY;
-ALTER TABLE license_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sync_logs ENABLE ROW LEVEL SECURITY;
 
 -- Allow authenticated users to read all data
 CREATE POLICY "Allow authenticated read access" ON employees FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read access" ON devices FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read access" ON software FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read access" ON device_software FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read access" ON tickets FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read access" ON licenses FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read access" ON license_assignments FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read access" ON sync_logs FOR SELECT TO authenticated USING (true);

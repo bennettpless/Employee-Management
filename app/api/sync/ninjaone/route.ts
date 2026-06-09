@@ -166,8 +166,6 @@ export async function POST(request: NextRequest) {
               deviceData.employee_id = existingDevice.employee_id
             }
 
-            let deviceId: string
-
             if (existingDevice) {
               const { error: updateError } = await supabase
                 .from('devices')
@@ -177,10 +175,8 @@ export async function POST(request: NextRequest) {
               if (updateError) {
                 throw new Error(`Failed to update device: ${updateError.message}`)
               }
-              
-              deviceId = existingDevice.id
             } else {
-              const { data: newDevice, error: insertError } = await supabase
+              const { error: insertError } = await supabase
                 .from('devices')
                 .insert(deviceData)
                 .select('id')
@@ -189,62 +185,7 @@ export async function POST(request: NextRequest) {
               if (insertError) {
                 throw new Error(`Failed to insert device: ${insertError.message}`)
               }
-              
-              deviceId = newDevice.id
             }
-
-            ninjaOne.getDeviceSoftware(device.id)
-              .then(async (softwareList) => {
-                if (!softwareList?.length) return
-                
-                await supabase
-                  .from('device_software')
-                  .delete()
-                  .eq('device_id', deviceId)
-
-                for (const sw of softwareList) {
-                  try {
-                    let { data: existingSoftware } = await supabase
-                      .from('software')
-                      .select('id')
-                      .eq('name', sw.name)
-                      .eq('version', sw.version || '')
-                      .eq('publisher', sw.publisher || '')
-                      .single()
-
-                    let softwareId: string
-
-                    if (existingSoftware) {
-                      softwareId = existingSoftware.id
-                    } else {
-                      const { data: newSoftware, error: swInsertError } = await supabase
-                        .from('software')
-                        .insert({
-                          name: sw.name,
-                          version: sw.version || null,
-                          publisher: sw.publisher || null
-                        })
-                        .select('id')
-                        .single()
-
-                      if (swInsertError || !newSoftware) continue
-                      softwareId = newSoftware.id
-                    }
-
-                    await supabase
-                      .from('device_software')
-                      .insert({
-                        device_id: deviceId,
-                        software_id: softwareId,
-                        install_date: sw.installDate || null,
-                        last_synced_at: new Date().toISOString()
-                      })
-                  } catch {
-                    // Silent fail for individual software items
-                  }
-                }
-              })
-              .catch(() => {})
 
             return { success: true, deviceId: device.id }
           } catch (error: any) {

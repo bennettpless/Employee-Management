@@ -130,32 +130,6 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    const softwareLicenses: Array<{ software_name: string; has_license: boolean }> = []
-    const licenseFields = [
-      'autocad', 'autocad_lt', 'aec', 'bim', 'bentley', 'hilti',
-      'softrack', 'risa', 'lucid', 'tekla_tedds',
-      'tekla_structural_designer', 'tekla_structural_designer_suite', 'etabs'
-    ]
-    
-    for (const field of licenseFields) {
-      if (body[field]) {
-        softwareLicenses.push({
-          software_name: field.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
-          has_license: true
-        })
-      }
-    }
-    
-    if (softwareLicenses.length > 0) {
-      await supabase
-        .from('employee_software_licenses')
-        .insert(softwareLicenses.map(l => ({
-          employee_id: newEmployee.id,
-          software_name: l.software_name,
-          has_license: l.has_license
-        })))
-    }
-    
     return NextResponse.json({ 
       success: true,
       employee: newEmployee 

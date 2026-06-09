@@ -27,32 +27,6 @@ export async function GET(
       )
     }
 
-    // Get software for this device
-    const { data: deviceSoftwareLinks } = await supabase
-      .from('device_software')
-      .select(`
-        software:software(
-          id,
-          name,
-          version,
-          publisher
-        ),
-        install_date
-      `)
-      .eq('device_id', device.id)
-
-    // Transform to flat software list
-    const software = deviceSoftwareLinks?.map((link: any) => ({
-      id: link.software.id,
-      name: link.software.name,
-      version: link.software.version,
-      publisher: link.software.publisher,
-      install_date: link.install_date
-    })) || []
-
-    // Sort by software name
-    software.sort((a: any, b: any) => a.name.localeCompare(b.name))
-
     // Get device assignment history (current and previous users)
     const { data: assignmentHistory } = await supabase
       .from('device_assignments_history')
@@ -87,7 +61,6 @@ export async function GET(
     return NextResponse.json({ 
       device: {
         ...device,
-        software,
         current_users: currentAssignments.map((a: any) => ({
           employee: a.employee,
           assignment_date: a.assignment_date,

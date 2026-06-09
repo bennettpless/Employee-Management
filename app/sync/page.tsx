@@ -176,7 +176,7 @@ export default function SyncPage() {
             Back to Home
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Data Synchronization</h1>
-          <p className="text-gray-600">Sync device and software data from NinjaOne and Intune</p>
+          <p className="text-gray-600">Sync device data from NinjaOne and Intune</p>
         </div>
 
         {/* Seed from Excel */}
@@ -212,7 +212,6 @@ export default function SyncPage() {
                 <li>Excel rows read: {seedResult.stats?.excelRows}</li>
                 <li>Employees created: {seedResult.stats?.employees}</li>
                 <li>Devices created: {seedResult.stats?.devices}</li>
-                <li>Licenses recorded: {seedResult.stats?.licenses}</li>
                 {seedResult.stats?.errors > 0 && (
                   <li className="text-red-600">Errors: {seedResult.stats.errors}</li>
                 )}
@@ -226,7 +225,7 @@ export default function SyncPage() {
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Sync from NinjaOne</h3>
             <p className="text-sm text-gray-600">
-              Pull latest device details, hardware specs, and installed software from NinjaOne. 
+              Pull latest device details and hardware specs from NinjaOne. 
               This also runs automatically every day at 3:00 AM UTC.
             </p>
           </div>

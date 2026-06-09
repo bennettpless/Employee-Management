@@ -135,13 +135,7 @@ describe('GET /api/employees/[id]', () => {
       if (table === 'devices') {
         return chainable({ data: [], error: null })
       }
-      if (table === 'license_assignments') {
-        return chainable({ data: [], error: null })
-      }
       if (table === 'device_assignments_history') {
-        return chainable({ data: [], error: null })
-      }
-      if (table === 'device_software') {
         return chainable({ data: [], error: null })
       }
       return chainable({ data: [], error: null })

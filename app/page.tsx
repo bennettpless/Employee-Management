@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Script from 'next/script'
-import { Users, Server, HardDrive, Key, Settings, RefreshCw, Bot } from 'lucide-react'
+import { Users, Server, Network, Settings, RefreshCw, Bot } from 'lucide-react'
 
 export default function Home() {
   const agentUrl = process.env.IT_RESPONSE_AGENT_URL?.replace(/\/$/, '')
@@ -16,8 +16,8 @@ export default function Home() {
             Employee Management System
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Unified employee and device management powered by NinjaOne.
-            Keep track of employees, devices, software, and licenses all in one place.
+            Unified employee, device, and network inventory across all 11 offices.
+            Track who has what equipment and how every site is wired together.
           </p>
         </div>
 
@@ -46,35 +46,21 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-gray-900 ml-4">Devices</h2>
               </div>
               <p className="text-gray-600">
-                Track all devices from NinjaOne, see who they're assigned to, and view installed software on each device.
+                Track all devices synced from NinjaOne and Intune, hardware specs, and current assignment to employees.
               </p>
             </div>
           </Link>
 
-          <Link href="/software" className="group">
+          <Link href="/network" className="group">
             <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-purple-500">
               <div className="flex items-center mb-4">
                 <div className="bg-purple-100 rounded-lg p-3 group-hover:bg-purple-500 transition-colors duration-300">
-                  <HardDrive className="w-8 h-8 text-purple-600 group-hover:text-white" />
+                  <Network className="w-8 h-8 text-purple-600 group-hover:text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 ml-4">Software</h2>
+                <h2 className="text-2xl font-bold text-gray-900 ml-4">Network</h2>
               </div>
               <p className="text-gray-600">
-                View all software across your organization. See versions, which devices have which versions, and identify who needs updates.
-              </p>
-            </div>
-          </Link>
-
-          <Link href="/licenses" className="group">
-            <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-orange-500">
-              <div className="flex items-center mb-4">
-                <div className="bg-orange-100 rounded-lg p-3 group-hover:bg-orange-500 transition-colors duration-300">
-                  <Key className="w-8 h-8 text-orange-600 group-hover:text-white" />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 ml-4">Licenses</h2>
-              </div>
-              <p className="text-gray-600">
-                Manage software licenses, track seat usage, expiration dates, and assign licenses to employees.
+                Geographic map of all 11 offices and per-office topology of switches, access points, firewalls, and servers.
               </p>
             </div>
           </Link>
@@ -158,7 +144,7 @@ export default function Home() {
               </div>
               <div>
                 <h4 className="font-semibold text-gray-900 mb-1">NinjaOne Device Tracking</h4>
-                <p className="text-gray-600 text-sm">See all devices and software assigned to each employee</p>
+                <p className="text-gray-600 text-sm">Hardware specs, OS, and current owner pulled from NinjaOne and Intune</p>
               </div>
             </div>
             <div className="flex items-start">
@@ -175,8 +161,8 @@ export default function Home() {
                 <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
               </div>
               <div>
-                <h4 className="font-semibold text-gray-900 mb-1">License Management</h4>
-                <p className="text-gray-600 text-sm">Track software licenses, usage, and expiration dates</p>
+                <h4 className="font-semibold text-gray-900 mb-1">Network Inventory</h4>
+                <p className="text-gray-600 text-sm">Switches, APs, firewalls, and servers tracked per office with topology diagrams</p>
               </div>
             </div>
             <div className="flex items-start">
@@ -193,8 +179,8 @@ export default function Home() {
                 <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
               </div>
               <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Software Inventory</h4>
-                <p className="text-gray-600 text-sm">Track software versions across devices and identify update needs</p>
+                <h4 className="font-semibold text-gray-900 mb-1">Geographic Map</h4>
+                <p className="text-gray-600 text-sm">See all offices on a single map with device counts and links into each site</p>
               </div>
             </div>
           </div>

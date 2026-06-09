@@ -28,7 +28,7 @@
 
 | Phase | File | Status | Commit |
 |-------|------|--------|--------|
-| 12. Remove Software + Licenses | [12-software-licenses-removal.md](./12-software-licenses-removal.md) | ⬜ Pending | — |
+| 12. Remove Software + Licenses | [12-software-licenses-removal.md](./12-software-licenses-removal.md) | ✅ Complete | _pending commit_ |
 | 13. Network Schema + Offices Admin | [13-network-schema.md](./13-network-schema.md) | ⬜ Pending | — |
 | 14. Network Inventory (Manual + Import) | [14-network-inventory.md](./14-network-inventory.md) | ⬜ Pending | — |
 | 15. Geographic Office Map | [15-network-geo-map.md](./15-network-geo-map.md) | ⬜ Pending | — |

@@ -180,21 +180,6 @@ export const EXCEL_COLUMNS = {
   ENROLLED_IN_INTUNE: 'Enrolled in Intune',
   NINJA_END_USER_REMOTE_ACCESS: 'Ninja End User Remote Access',
   OFFICE_365_MFA: 'Office 365 MFA',
-  
-  // Software Licenses
-  AUTOCAD: 'Autocad',
-  AUTOCAD_LT: 'Autocad LT',
-  AEC: 'AEC',
-  BIM: 'BIM',
-  BENTLEY: 'Bentley',
-  HILTI: 'Hilti',
-  SOFTRACK: 'Softrack',
-  RISA: 'RISA',
-  LUCID: 'Lucid',
-  TEKLA_TEDDS: 'Tekla Tedds',
-  TEKLA_STRUCTURAL_DESIGNER: 'Tekla Structural Designer',
-  TEKLA_STRUCTURAL_DESIGNER_SUITE: 'Tekla Structural Designer Suite',
-  ETABS: 'eTABS',
 } as const
 
 export interface ExcelRow {

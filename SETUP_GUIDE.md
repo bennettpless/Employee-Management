@@ -81,10 +81,7 @@ If the dev server starts without errors, you're ready to proceed.
 2. You should see these tables:
    - employees
    - devices
-   - device_software
    - tickets
-   - licenses
-   - license_assignments
    - sync_logs
 
 ## Microsoft Azure / SharePoint Setup
@@ -371,7 +368,7 @@ Open http://localhost:3000
 - Reads the Excel file from SharePoint via Microsoft Graph
 - Creates or updates employee records in Supabase
 - Creates or updates device records and assigns them to employees
-- NinjaOne sync may run afterward to fill in device details (serial, OS, software)
+- NinjaOne sync may run afterward to fill in device details (serial, OS)
 
 ### Step 3: Verify Employee and Device Roster
 
@@ -385,13 +382,13 @@ Open http://localhost:3000
 
 ### Step 4: NinjaOne (Device Details)
 
-After Excel sync, NinjaOne sync often runs automatically to populate serial numbers, OS, and software. You can also trigger it via cron (see README). Devices from Excel are matched to NinjaOne by name/serial.
+After Excel sync, NinjaOne sync often runs automatically to populate serial numbers and OS info. You can also trigger it via cron (see README). Devices from Excel are matched to NinjaOne by name/serial.
 
 ### Step 5: Verify Device Data
 
 1. Go to **Devices** page
 2. Confirm devices show details (serial, OS) where NinjaOne has matched
-3. On an employee profile, check that assigned devices and software appear
+3. On an employee profile, check that assigned devices appear
 
 **If devices aren’t linking**:
 - NinjaOne sync matches by device name/serial; see `app/api/sync/ninjaone/route.ts` if you need to adjust logic
@@ -556,10 +553,10 @@ If you encounter issues:
 
 After successful setup:
 
-1. **License Management**:
-   - Add software licenses
-   - Assign licenses to employees
-   - Set up expiration alerts
+1. **Network Inventory** (v2 in progress):
+   - Configure the 11 offices via `/settings/offices`
+   - Optionally enable Auvik sync (`AUVIK_API_USER` / `AUVIK_API_KEY` / `AUVIK_TENANT_DOMAIN`)
+   - Manually add or CSV-import switches, APs, firewalls, and servers per office
 
 2. **Customization**:
    - Adjust sync schedules

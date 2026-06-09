@@ -46,39 +46,6 @@ export function mapExcelRowToEmployee(row: ExcelRow) {
     }
   })
   
-  // Map software licenses (all the software columns)
-  const softwareLicenses: Array<{ software_name: string; has_license: boolean }> = []
-  
-  const softwareColumns = [
-    EXCEL_COLUMNS.AUTOCAD,
-    EXCEL_COLUMNS.AUTOCAD_LT,
-    EXCEL_COLUMNS.AEC,
-    EXCEL_COLUMNS.BIM,
-    EXCEL_COLUMNS.BENTLEY,
-    EXCEL_COLUMNS.HILTI,
-    EXCEL_COLUMNS.SOFTRACK,
-    EXCEL_COLUMNS.RISA,
-    EXCEL_COLUMNS.LUCID,
-    EXCEL_COLUMNS.TEKLA_TEDDS,
-    EXCEL_COLUMNS.TEKLA_STRUCTURAL_DESIGNER,
-    EXCEL_COLUMNS.TEKLA_STRUCTURAL_DESIGNER_SUITE,
-    EXCEL_COLUMNS.ETABS,
-  ]
-  
-  for (const column of softwareColumns) {
-    const value = row[column]
-    // Check if the value indicates a license (could be "Yes", "Y", true, "1", etc.)
-    const hasLicense = value !== null && value !== undefined && value !== '' && 
-                      (value === true || value === 'Yes' || value === 'Y' || value === '1' || value === 1)
-    
-    if (hasLicense) {
-      softwareLicenses.push({
-        software_name: column,
-        has_license: true
-      })
-    }
-  }
-  
   // Store all Excel data in JSONB for reference
   const excelData: any = {}
   for (const [key, value] of Object.entries(row)) {
@@ -128,7 +95,6 @@ export function mapExcelRowToEmployee(row: ExcelRow) {
     excel_data: excelData,
     
     // Additional data
-    softwareLicenses,
     devices
   }
 }
@@ -196,17 +162,6 @@ export function mapEmployeeToExcelRow(employee: any): ExcelRow {
     row[EXCEL_COLUMNS.POTENTIAL_UNUSED_DEVICES_DATE] = employee.excel_data[EXCEL_COLUMNS.POTENTIAL_UNUSED_DEVICES_DATE]
   } else {
     row[EXCEL_COLUMNS.POTENTIAL_UNUSED_DEVICES_DATE] = ''
-  }
-  
-  // Software licenses
-  if (employee.software_licenses) {
-    for (const license of employee.software_licenses) {
-      if (license.has_license) {
-        row[license.software_name] = 'Yes'
-      } else {
-        row[license.software_name] = 'No'
-      }
-    }
   }
   
   // If excel_data exists, merge any additional fields (including ID)

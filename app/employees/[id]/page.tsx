@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { 
   ArrowLeft, User, Mail, Phone, Briefcase, MapPin, Calendar, 
-  Server, Key, Loader2, Home, Edit, UserMinus
+  Server, Loader2, Home, Edit, UserMinus
 } from 'lucide-react'
 import { EmployeeWithRelations } from '@/lib/types'
 import { format } from 'date-fns'
@@ -13,14 +13,13 @@ import EditEmployeeModal from '@/components/employee-detail/EditEmployeeModal'
 import AddDeviceModal from '@/components/employee-detail/AddDeviceModal'
 import OffboardModal from '@/components/employee-detail/OffboardModal'
 import EmployeeDevicesTab from '@/components/employee-detail/EmployeeDevicesTab'
-import EmployeeLicensesTab from '@/components/employee-detail/EmployeeLicensesTab'
 
 export default function EmployeeDetailPage() {
   const params = useParams()
   const router = useRouter()
   const [employee, setEmployee] = useState<EmployeeWithRelations | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'licenses'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'devices'>('overview')
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<any>({})
   const [saving, setSaving] = useState(false)
@@ -150,7 +149,6 @@ export default function EmployeeDetailPage() {
           ...employee,
           ...data.employee,
           devices: employee.devices || [],
-          license_assignments: employee.license_assignments || [],
           previous_devices: employee.previous_devices || [],
           manager: (employee as any).manager || null
         }))
@@ -518,20 +516,6 @@ export default function EmployeeDetailPage() {
               </div>
             </div>
           </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-600 mb-1">Licenses</div>
-                <div className="text-3xl font-bold text-gray-900">
-                  {employee.license_assignments?.length || 0}
-                </div>
-              </div>
-              <div className="bg-orange-100 rounded-lg p-3">
-                <Key className="w-8 h-8 text-orange-600" />
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Tabs */}
@@ -558,16 +542,6 @@ export default function EmployeeDetailPage() {
               >
                 Devices ({employee.devices?.length || 0})
               </button>
-              <button
-                onClick={() => setActiveTab('licenses')}
-                className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'licenses'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Licenses ({employee.license_assignments?.length || 0})
-              </button>
             </nav>
           </div>
 
@@ -581,12 +555,6 @@ export default function EmployeeDetailPage() {
                       <div className="text-sm text-gray-600 mb-2">Total Devices</div>
                       <div className="text-2xl font-bold text-gray-900">
                         {employee.devices?.length || 0}
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="text-sm text-gray-600 mb-2">Licenses</div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {employee.license_assignments?.length || 0}
                       </div>
                     </div>
                   </div>
@@ -604,12 +572,6 @@ export default function EmployeeDetailPage() {
                   setIsAddingDevice(true)
                 }}
                 onRemoveDevice={handleRemoveDevice}
-              />
-            )}
-
-            {activeTab === 'licenses' && (
-              <EmployeeLicensesTab
-                licenseAssignments={employee.license_assignments || []}
               />
             )}
           </div>

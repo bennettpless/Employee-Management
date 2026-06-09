@@ -98,10 +98,6 @@ class NinjaOneClient {
     return this.makeRequest(`/device/${deviceId}`)
   }
 
-  async getDeviceSoftware(deviceId: string) {
-    return this.makeRequest(`/device/${deviceId}/software`)
-  }
-
 }
 
 export const ninjaOne = new NinjaOneClient()
@@ -123,12 +119,5 @@ export interface NinjaDevice {
     name: string
     value: string
   }>
-}
-
-export interface NinjaSoftware {
-  name: string
-  version: string
-  publisher: string
-  installDate?: string
 }
 

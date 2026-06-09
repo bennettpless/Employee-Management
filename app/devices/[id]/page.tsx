@@ -9,14 +9,6 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 
-interface DeviceSoftware {
-  id: string
-  name: string
-  version: string | null
-  publisher: string | null
-  install_date: string | null
-}
-
 interface DeviceWithRelations {
   id: string
   ninja_device_id: string
@@ -59,7 +51,6 @@ interface DeviceWithRelations {
     unassignment_date: string | null
     registered_date?: string
   }>
-  software: DeviceSoftware[]
 }
 
 export default function DeviceDetailPage() {
@@ -327,45 +318,6 @@ export default function DeviceDetailPage() {
           </div>
         )}
 
-        {/* Software Section */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="border-b border-gray-200 p-6">
-            <h2 className="text-2xl font-bold text-gray-900">Installed Software</h2>
-            <p className="text-sm text-gray-600 mt-1">{device.software.length} applications</p>
-          </div>
-
-          <div className="p-6">
-            {device.software.length === 0 ? (
-              <div className="text-center py-12">
-                <HardDrive className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No software information available for this device</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {device.software.map((sw) => (
-                  <div key={sw.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-gray-900">{sw.name}</h4>
-                      {sw.version && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                          v{sw.version}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      {sw.publisher && (
-                        <span className="font-medium">{sw.publisher}</span>
-                      )}
-                      {sw.install_date && (
-                        <span>Installed: {format(new Date(sw.install_date), 'MMM d, yyyy')}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   )

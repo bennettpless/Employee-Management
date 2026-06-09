@@ -7,14 +7,9 @@ export const maxDuration = 300
 export const runtime = 'nodejs'
 
 const TABLES_IN_DELETE_ORDER = [
-  'device_software',
   'device_assignments_history',
-  'license_assignments',
-  'employee_software_licenses',
   'tickets',
   'devices',
-  'software',
-  'licenses',
   'sync_logs',
   'employees',
 ]
@@ -26,12 +21,10 @@ export async function POST(_request: NextRequest) {
 
     // 1. Truncate all tables in dependency order
     for (const table of TABLES_IN_DELETE_ORDER) {
-      // device_software uses composite key (no 'id' column), use device_id instead
-      const filterCol = table === 'device_software' ? 'device_id' : 'id'
       const { error } = await supabase
         .from(table)
         .delete()
-        .neq(filterCol, '00000000-0000-0000-0000-000000000000')
+        .neq('id', '00000000-0000-0000-0000-000000000000')
       if (error) {
         console.error(`Error clearing ${table}:`, error.message)
       } else {
@@ -46,13 +39,12 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: 'Excel sheet was empty — no employees to import',
-        stats: { employees: 0, devices: 0, licenses: 0 },
+        stats: { employees: 0, devices: 0 },
       })
     }
 
     let employeesCreated = 0
     let devicesCreated = 0
-    let licensesCreated = 0
     const errors: string[] = []
 
     // 3. Import each row
@@ -120,22 +112,6 @@ export async function POST(_request: NextRequest) {
           }
         }
 
-        // Insert software licenses
-        if (mapped.softwareLicenses.length > 0) {
-          const licenseRows = mapped.softwareLicenses.map((l) => ({
-            employee_id: newEmployee.id,
-            software_name: l.software_name,
-            has_license: l.has_license,
-          }))
-
-          const { error: licenseError } = await supabase
-            .from('employee_software_licenses')
-            .insert(licenseRows)
-
-          if (!licenseError) {
-            licensesCreated += licenseRows.length
-          }
-        }
       } catch (err: any) {
         errors.push(`Row error: ${err.message}`)
       }
@@ -149,7 +125,6 @@ export async function POST(_request: NextRequest) {
         excelRows: rows.length,
         employees: employeesCreated,
         devices: devicesCreated,
-        licenses: licensesCreated,
         errors: errors.length,
       },
       duration,

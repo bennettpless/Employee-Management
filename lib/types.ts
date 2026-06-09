@@ -41,46 +41,6 @@ export interface Device {
   employee?: Employee
 }
 
-export interface DeviceSoftware {
-  id: string
-  device_id: string
-  software_name: string
-  software_version: string | null
-  publisher: string | null
-  install_date: string | null
-  last_synced_at: string
-  created_at: string
-}
-
-export interface License {
-  id: string
-  software_name: string
-  license_type: string | null
-  license_key: string | null
-  total_seats: number | null
-  used_seats: number
-  vendor: string | null
-  purchase_date: string | null
-  expiration_date: string | null
-  cost: number | null
-  billing_frequency: string | null
-  notes: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface LicenseAssignment {
-  id: string
-  license_id: string
-  employee_id: string
-  assigned_date: string
-  revoked_date: string | null
-  notes: string | null
-  created_at: string
-  employee?: Employee
-  license?: License
-}
-
 export interface SyncLog {
   id: string
   sync_type: 'entra_id' | 'ninjaone' | 'intune' | 'excel'
@@ -102,6 +62,5 @@ export interface PreviousDevice extends Device {
 export interface EmployeeWithRelations extends Employee {
   devices?: Device[]
   previous_devices?: PreviousDevice[]
-  license_assignments?: LicenseAssignment[]
 }
 

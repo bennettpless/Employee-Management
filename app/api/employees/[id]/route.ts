@@ -37,56 +37,6 @@ export async function GET(
     
     employee.devices = allDevices || []
 
-    const { data: licenseAssignments } = await supabase
-      .from('license_assignments')
-      .select(`
-        *,
-        license:licenses(*)
-      `)
-      .eq('employee_id', employee.id)
-    
-    employee.license_assignments = licenseAssignments || []
-
-    if (employee.devices && employee.devices.length > 0) {
-      const deviceIds = employee.devices.map((d: any) => d.id)
-      const { data: allSoftwareLinks } = await supabase
-        .from('device_software')
-        .select(`
-          device_id,
-          software:software(
-            id,
-            name,
-            version,
-            publisher
-          ),
-          install_date
-        `)
-        .in('device_id', deviceIds)
-
-      const softwareByDevice = new Map<string, any[]>()
-      if (allSoftwareLinks) {
-        for (const link of allSoftwareLinks) {
-          if (!link.software) continue
-          const sw = {
-            id: (link.software as any).id,
-            name: (link.software as any).name,
-            version: (link.software as any).version,
-            publisher: (link.software as any).publisher,
-            install_date: link.install_date
-          }
-          const list = softwareByDevice.get(link.device_id) || []
-          list.push(sw)
-          softwareByDevice.set(link.device_id, list)
-        }
-      }
-
-      employee.devices = employee.devices.map((device: any) => {
-        const software = softwareByDevice.get(device.id) || []
-        software.sort((a: any, b: any) => a.name.localeCompare(b.name))
-        return { ...device, software }
-      })
-    }
-
     if (employee.manager_entra_id) {
       const { data: manager } = await supabase
         .from('employees')
