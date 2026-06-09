@@ -99,8 +99,8 @@ The dashboard card grid will go from 7 cards to a clean 2x3: **Employees, Device
 - [x] `/software` and `/licenses` return 404 (the routes no longer exist)
 - [x] Dashboard shows 6 cards (Employees, Devices, Network, Sync Status, IT Response Agent, Settings) in a 3-column grid that wraps to 2 rows; Network card links to the stub page
 - [x] Employee detail page shows only Overview and Devices tabs (Stats Cards section reduced from 2 cards to 1)
-- [ ] Migration runs cleanly against a fresh DB and against a populated dev DB *(not exercised in this phase — needs to be applied manually against the Supabase project; left to the operator since this repo only stores SQL files, no automated migration runner)*
-- [ ] `psql \dt` shows no `software`, `device_software`, `licenses`, `license_assignments`, `employee_software_licenses` tables after migration *(same — operator-side step)*
+- [x] Migration runs cleanly against a fresh DB and against a populated dev DB *(operator applied `02_drop_software_and_licenses.sql` manually against the Supabase project on 2026-06-09)*
+- [x] `psql \dt` shows no `software`, `device_software`, `licenses`, `license_assignments`, `employee_software_licenses` tables after migration *(confirmed by operator after running the migration)*
 - [x] No remaining `grep -ri "license\|software"` matches in `app/`, `components/`, or `lib/` (cleaner than the original target, which allowed exceptions for NinjaOne sync — those were removed too because the underlying tables are dropped)
 
 ## Implementation Notes

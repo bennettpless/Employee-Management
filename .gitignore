@@ -35,5 +35,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-
+# local data exports / spreadsheets (never commit)
+/IT Team All Data.xlsx
+*.xlsx
 
