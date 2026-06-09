@@ -13,6 +13,9 @@ describe('validateEnv', () => {
     'SHAREPOINT_FILE_PATH',
     'NINJA_CLIENT_ID',
     'NINJA_CLIENT_SECRET',
+    'NEXTAUTH_SECRET',
+    'IT_RESPONSE_AGENT_URL',
+    'IT_RESPONSE_AGENT_API_KEY',
   ]
 
   let originalEnv: NodeJS.ProcessEnv

@@ -1,7 +1,12 @@
 import Link from 'next/link'
-import { Users, Server, HardDrive, Key, Settings, RefreshCw } from 'lucide-react'
+import Script from 'next/script'
+import { Users, Server, HardDrive, Key, Settings, RefreshCw, Bot } from 'lucide-react'
 
 export default function Home() {
+  const agentUrl = process.env.IT_RESPONSE_AGENT_URL?.replace(/\/$/, '')
+  const agentApiKey = process.env.IT_RESPONSE_AGENT_API_KEY
+  const agentConfigured = Boolean(agentUrl && agentApiKey)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <div className="container mx-auto px-4 py-12">
@@ -88,6 +93,27 @@ export default function Home() {
             </div>
           </Link>
 
+          <Link href="/response-agent" className="group">
+            <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-rose-500">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <div className="bg-rose-100 rounded-lg p-3 group-hover:bg-rose-500 transition-colors duration-300">
+                    <Bot className="w-8 h-8 text-rose-600 group-hover:text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 ml-4">IT Response Agent</h2>
+                </div>
+                <span
+                  id="ai-review-badge"
+                  className="inline-flex min-w-[1.5rem] h-6 px-2 items-center justify-center rounded-full bg-rose-600 text-white text-xs font-semibold empty:hidden"
+                  aria-label="Pending AI responses"
+                />
+              </div>
+              <p className="text-gray-600">
+                Review AI-recommended responses to NinjaOne tickets. Accept, edit, reject, or forward replies to users.
+              </p>
+            </div>
+          </Link>
+
           <Link href="/settings" className="group">
             <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-gray-500">
               <div className="flex items-center mb-4">
@@ -102,6 +128,16 @@ export default function Home() {
             </div>
           </Link>
         </div>
+
+        {agentConfigured && (
+          <Script
+            src={`${agentUrl}/embed.js`}
+            strategy="afterInteractive"
+            data-api-url={agentUrl}
+            data-api-key={agentApiKey}
+            data-poll-interval="30"
+          />
+        )}
 
         {/* Key Features Section */}
         <div className="bg-white rounded-xl shadow-lg p-8 mt-12">

@@ -211,6 +211,10 @@ NINJA_CLIENT_ID=
 NINJA_CLIENT_SECRET=
 NINJA_REGION=us
 
+# IT Response Agent (Phase 11)
+IT_RESPONSE_AGENT_URL=https://app-itticketagent-api-prod.azurewebsites.net
+IT_RESPONSE_AGENT_API_KEY=
+
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 SYNC_CRON_SECRET=
@@ -280,10 +284,71 @@ NINJA_CLIENT_ID=a1b2c3d4e5f6g7h8i9j0
 NINJA_CLIENT_SECRET=AbC123-DeF456_GhI789-JkL012
 NINJA_REGION=us
 
+# IT Response Agent (Phase 11)
+IT_RESPONSE_AGENT_URL=https://app-itticketagent-api-prod.azurewebsites.net
+IT_RESPONSE_AGENT_API_KEY=your-shared-agent-api-key
+
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 SYNC_CRON_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 ```
+
+## IT Response Agent Setup (Phase 11)
+
+The Employee Management System embeds the [IT Response Agent](https://github.com/bennettpless/IT-Response-Agent)'s review dashboard at `/response-agent` and shows a live "pending review" badge on the home page via the agent's `embed.js` script. Two env vars are required.
+
+### Step 1: Deploy or locate the IT Response Agent
+
+You need a reachable IT Response Agent server (Express.js + Azure Postgres). The default deployment URL used by this organization is:
+
+```
+https://app-itticketagent-api-prod.azurewebsites.net
+```
+
+If you're using a different deployment, substitute your URL throughout this section.
+
+### Step 2: Get the AGENT_API_KEY
+
+The IT Response Agent server requires an `X-API-Key` header on every request. The value lives on the agent server as `AGENT_API_KEY` (in Azure App Service config or wherever the agent is hosted). Copy that value — you'll paste it into EMS as `IT_RESPONSE_AGENT_API_KEY`.
+
+### Step 3: Add the env vars to EMS
+
+Add both vars to `.env.local` (and to Vercel for production):
+
+```bash
+IT_RESPONSE_AGENT_URL=https://app-itticketagent-api-prod.azurewebsites.net
+IT_RESPONSE_AGENT_API_KEY=<paste AGENT_API_KEY from the agent server>
+```
+
+These are validated at startup by `lib/env.ts` — the app will refuse to boot if either is missing.
+
+### Step 4: Set PORTAL_ORIGIN on the IT Response Agent server
+
+This is a one-time change on the **IT Response Agent** deployment (not EMS). The agent uses `PORTAL_ORIGIN` to allow the EMS app to embed `review.html` via iframe and call its API from `embed.js`.
+
+On the agent server (e.g. Azure App Service > Configuration > Application settings), set:
+
+```
+PORTAL_ORIGIN=https://employee-management.vercel.app
+```
+
+For local development, include both:
+
+```
+PORTAL_ORIGIN=https://employee-management.vercel.app,http://localhost:3000
+```
+
+Multiple origins are comma-separated. Restart the agent after changing this.
+
+### Step 5: Verify
+
+After `npm run dev`:
+
+- Visit `/` — the IT Response Agent card should appear in the grid
+- If there are pending recommendations, a rose-colored badge with the count appears in the card header
+- Click the card — `/response-agent` loads the agent's `review.html` in a full-height iframe
+- If the iframe is blank or the badge never appears, check the browser console for CORS errors (means `PORTAL_ORIGIN` is wrong on the agent)
+- If you see "IT Response Agent not configured" on `/response-agent`, the env vars aren't set
 
 ## First Data Sync
 
@@ -371,10 +436,18 @@ git push -u origin main
 In Vercel project settings:
 
 1. Go to **Settings** > **Environment Variables**
-2. Add ALL variables from your `.env` file
+2. Add ALL variables from your `.env` file, including:
+   - Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+   - Azure: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`
+   - SharePoint: `SHAREPOINT_SITE_PATH`, `SHAREPOINT_FILE_PATH`
+   - NinjaOne: `NINJA_CLIENT_ID`, `NINJA_CLIENT_SECRET`, `NINJA_REGION` (optional)
+   - NextAuth: `NEXTAUTH_SECRET`, `NEXTAUTH_URL` (optional)
+   - IT Response Agent: `IT_RESPONSE_AGENT_URL`, `IT_RESPONSE_AGENT_API_KEY`
+   - Cron: `SYNC_CRON_SECRET`
 3. Update these for production:
    - `NEXT_PUBLIC_APP_URL`: Your Vercel URL
    - `AZURE_REDIRECT_URI`: Update if using auth
+4. After deployment, set `PORTAL_ORIGIN` on the **IT Response Agent** server to your Vercel URL (e.g. `https://employee-management.vercel.app`) so the iframe + `embed.js` can talk to it cross-origin. Multiple origins comma-separated.
 
 #### Step 4: Deploy
 
