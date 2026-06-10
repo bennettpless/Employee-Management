@@ -1,0 +1,4 @@
+office_name,name,device_type,manufacturer,model,serial_number,management_ip,management_url,mac_address,status,credentials_vault_ref,notes
+Atlanta HQ,ATL-FW-01,firewall,SonicWall,TZ670,SN12345,10.0.0.1,https://10.0.0.1,00:11:22:33:44:55,online,LastPass: Atlanta Firewall Admin,Primary firewall
+Atlanta HQ,ATL-SW-01,switch,Cisco,Catalyst 2960,SN12346,10.0.0.2,https://10.0.0.2,00:11:22:33:44:56,online,LastPass: Atlanta Switch Admin,Main floor distribution switch
+Atlanta HQ,ATL-AP-01,access_point,Ubiquiti,UniFi U6-Pro,SN12347,10.0.0.10,,00:11:22:33:44:57,online,,Conference room AP
