@@ -12,8 +12,8 @@ export const config = {
      * Protect all routes EXCEPT:
      * - /login (sign-in page)
      * - /api/auth/* (NextAuth endpoints)
-     * - /api/sync/ninjaone (Vercel cron, uses SYNC_CRON_SECRET)
-     * - /api/sync/intune (Vercel cron, uses SYNC_CRON_SECRET)
+     * - /api/sync/ninjaone (Windows Task Scheduler cron on the prod desktop, uses SYNC_CRON_SECRET)
+     * - /api/sync/intune (manual-trigger only today; same SYNC_CRON_SECRET if a cron is ever added)
      * - /_next/* (static assets)
      * - /favicon.ico
      */

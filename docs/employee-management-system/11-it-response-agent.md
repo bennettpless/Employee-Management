@@ -76,9 +76,9 @@ All endpoints require the `X-API-Key` header (value: `AGENT_API_KEY`).
 
 ### IT Response Agent Server Configuration
 - [ ] Set `PORTAL_ORIGIN` on the IT Response Agent deployment (deployment-time action — not a code change)
-  - Value: the Employee Management app's origin (e.g., `https://employee-management.vercel.app`)
+  - Value: the Employee Management app's production origin (TBD pending the Phase 20 deployment-direction decision) plus `http://localhost:3000` for dev — comma-separated
   - This allows the iframe to load and `embed.js` to make cross-origin requests
-  - Multiple origins can be comma-separated
+  - The Phase 20 doc has a draft message-to-Bennett (Appendix D) that should be re-tailored once the prod URL is known
 
 ## Key Files
 - `app/response-agent/page.tsx` — response agent page (new)
@@ -138,5 +138,5 @@ IT Response Agent (Express.js)
 - **Build verification**: `npm run build` exits 0 with `/response-agent` listed as a dynamic route (178 B First-Load JS delta). The dynamic-server-usage warnings that appear during static page generation are pre-existing (originate from `/api/devices`, `/api/employees`, `/api/software`, `/api/licenses`, `/api/sync/logs`) and unrelated to this phase.
 
 ### Outstanding deployment-time tasks (not code)
-- Set `IT_RESPONSE_AGENT_URL` and `IT_RESPONSE_AGENT_API_KEY` on each environment (Vercel, local `.env.local`).
-- Set `PORTAL_ORIGIN` on the IT Response Agent server to the EMS origin so CORS + iframe embedding work.
+- Set `IT_RESPONSE_AGENT_URL` and `IT_RESPONSE_AGENT_API_KEY` on each environment (local `.env.local` plus whatever production environment Phase 20 ultimately picks).
+- Set `PORTAL_ORIGIN` on the IT Response Agent server to the prod EMS origin (TBD via Phase 20) plus `http://localhost:3000` for dev so CORS + iframe embedding work.

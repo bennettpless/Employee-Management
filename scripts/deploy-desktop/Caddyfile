@@ -1,0 +1,24 @@
+# Caddyfile for EMS production (spare desktop)
+# Place this at C:\caddy\Caddyfile
+
+{
+    # We're only serving on the LAN with internal certs — no Let's Encrypt redirects needed.
+    auto_https disable_redirects
+}
+
+ems.local {
+    # `tls internal` makes Caddy issue and auto-renew a leaf cert from its built-in local CA.
+    # Each employee machine must trust the local CA's root cert (pushed via NinjaOne).
+    tls internal
+
+    encode gzip
+
+    # Forward everything to the Next.js production server on localhost:3000.
+    reverse_proxy localhost:3000 {
+        # Forward the original Host header so NextAuth sees `ems.local` (not `localhost`).
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

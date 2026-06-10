@@ -310,7 +310,7 @@ The IT Response Agent server requires an `X-API-Key` header on every request. Th
 
 ### Step 3: Add the env vars to EMS
 
-Add both vars to `.env.local` (and to Vercel for production):
+Add both vars to `.env.local` (and to the production `.env.local` on the self-hosted desktop — see Phase 20 doc Appendix A):
 
 ```bash
 IT_RESPONSE_AGENT_URL=https://app-itticketagent-api-prod.azurewebsites.net
@@ -323,19 +323,19 @@ These are validated at startup by `lib/env.ts` — the app will refuse to boot i
 
 This is a one-time change on the **IT Response Agent** deployment (not EMS). The agent uses `PORTAL_ORIGIN` to allow the EMS app to embed `review.html` via iframe and call its API from `embed.js`.
 
-On the agent server (e.g. Azure App Service > Configuration > Application settings), set:
+On the agent server (Azure App Service > Configuration > Application settings), set:
 
 ```
-PORTAL_ORIGIN=https://employee-management.vercel.app
+PORTAL_ORIGIN=https://ems.local
 ```
 
-For local development, include both:
+For local development as well, include both (comma-separated):
 
 ```
-PORTAL_ORIGIN=https://employee-management.vercel.app,http://localhost:3000
+PORTAL_ORIGIN=https://ems.local,http://localhost:3000
 ```
 
-Multiple origins are comma-separated. Restart the agent after changing this.
+Restart the agent after changing this. (See Phase 20 doc Appendix D for the exact message to send Bennett if he's the one who manages the agent deployment.)
 
 ### Step 5: Verify
 
@@ -402,76 +402,38 @@ After Excel sync, NinjaOne sync often runs automatically to populate serial numb
 
 ## Production Deployment
 
-### Option 1: Deploy to Vercel (Recommended)
+> ⚠️ **Status: Phase 20 deployment direction is on hold.** No production deployment has been committed to yet — the team is still deciding between cloud (Azure App Service / Vercel / Cloudflare) and self-hosted. See **[`docs/employee-management-system/20-production-deployment.md`](./docs/employee-management-system/20-production-deployment.md)** for the open decision and the most-developed option (self-hosted) below.
 
-#### Step 1: Push to GitHub
+The production deployment plan + step-by-step runbook lives in **[`docs/employee-management-system/20-production-deployment.md`](./docs/employee-management-system/20-production-deployment.md)**. Read that doc for the full picture; this section is a quick summary of the most-developed option and the alternatives still under consideration.
 
-```bash
-git init
-git add .
-git commit -m "Initial setup of employee management system"
+### Most-developed option: Self-hosted on a spare Windows desktop
 
-# Create GitHub repo, then:
-git remote add origin https://github.com/yourusername/employee-management.git
-git push -u origin main
-```
+EMS runs on a spare desktop on the Bennett & Pless office LAN, fronted by **Caddy** for HTTPS at `https://ems.local`. The Caddy root CA and a `hosts` file entry are pushed to all employee machines via **NinjaOne**, so users see a real green-padlock HTTPS site with no per-machine setup.
 
-#### Step 2: Import to Vercel
+- **Cost:** $0/month
+- **URL:** `https://ems.local` (LAN-internal; users must be on the office network or VPN)
+- **Cron:** Windows Task Scheduler on the desktop hits `/api/sync/ninjaone` nightly with `SYNC_CRON_SECRET`
+- **Helper scripts:** [`scripts/deploy-desktop/`](./scripts/deploy-desktop/), [`scripts/ninja-policies/`](./scripts/ninja-policies/), [`scripts/cron/`](./scripts/cron/)
+- **Runbook:** Phase 20 doc §20a–20j
 
-1. Go to [vercel.com](https://vercel.com)
-2. Sign in with GitHub
-3. Click **Add New Project**
-4. Import your GitHub repository
-5. Configure:
-   - **Framework Preset**: Next.js (auto-detected)
-   - **Root Directory**: ./
-   - **Build Command**: npm run build
-   - **Output Directory**: .next
+After the desktop is live, send the **PORTAL_ORIGIN** update message in Phase 20 Appendix D to Bennett (the IT Response Agent owner) so he can allowlist `https://ems.local` on the agent server. Until that's done, the Response Agent iframe + dashboard badge will fail with a CORS error.
 
-#### Step 3: Add Environment Variables
+### Why not Vercel / Azure / Cloudflare?
 
-In Vercel project settings:
+These were all evaluated and rejected for the current deployment:
 
-1. Go to **Settings** > **Environment Variables**
-2. Add ALL variables from your `.env` file, including:
-   - Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-   - Azure: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`
-   - SharePoint: `SHAREPOINT_SITE_PATH`, `SHAREPOINT_FILE_PATH`
-   - NinjaOne: `NINJA_CLIENT_ID`, `NINJA_CLIENT_SECRET`, `NINJA_REGION` (optional)
-   - NextAuth: `NEXTAUTH_SECRET`, `NEXTAUTH_URL` (optional)
-   - IT Response Agent: `IT_RESPONSE_AGENT_URL`, `IT_RESPONSE_AGENT_API_KEY`
-   - Cron: `SYNC_CRON_SECRET`
-3. Update these for production:
-   - `NEXT_PUBLIC_APP_URL`: Your Vercel URL
-   - `AZURE_REDIRECT_URI`: Update if using auth
-4. After deployment, set `PORTAL_ORIGIN` on the **IT Response Agent** server to your Vercel URL (e.g. `https://employee-management.vercel.app`) so the iframe + `embed.js` can talk to it cross-origin. Multiple origins comma-separated.
+- **Vercel** — Hobby tier explicitly prohibits commercial use; Pro is ~$20/user/month.
+- **Azure App Service** — requires a paid B1 tier (~$13/mo) for production-quality uptime; the F1 Free tier has a 60-CPU-minutes/day cap and no Always-On. Operator does not currently have a billable Azure subscription available.
+- **Cloudflare Tunnel + a real public subdomain** — would be ideal (real cert, no per-user setup) but requires DNS access to `bennett-pless.com` or `ben-net.tech` that the operator does not currently have. Tracked as **Phase 20.1 (Future)** in the Phase 20 doc.
 
-#### Step 4: Deploy
+### Alternative platforms (not currently used)
 
-1. Click **Deploy**
-2. Wait for build to complete
-3. Visit your deployment URL
-4. Test all functionality
+If you need to deploy elsewhere later, the app is standard Next.js 14 — `npm run build` followed by `npm start` on any Node 20 host works. You'll need to:
 
-#### Step 5: Verify Cron Jobs
-
-1. In Vercel project, go to **Settings** > **Cron Jobs**
-2. You should see the NinjaOne cron (e.g. daily at 3 AM) from `vercel.json`
-3. Excel sync is typically run manually from the Sync page
-
-### Option 2: Deploy to Other Platforms
-
-For AWS, Azure, or other platforms:
-
-1. Build the application:
-```bash
-npm run build
-```
-
-2. Set up Node.js hosting environment
-3. Configure environment variables
-4. Set up cron jobs manually (see README.md)
-5. Point domain to your deployment
+1. Set all 14 required environment variables (see [`.env.example`](./.env.example) and the Phase 20 doc Appendix A for the exact list)
+2. Run a cron that POSTs to `/api/sync/ninjaone` daily with `Authorization: Bearer ${SYNC_CRON_SECRET}`
+3. Add the new origin to the Azure AD App Registration redirect URIs: `<your-origin>/api/auth/callback/azure-ad`
+4. Update `PORTAL_ORIGIN` on the IT Response Agent server to include the new origin
 
 ## Troubleshooting
 
@@ -537,7 +499,7 @@ If you encounter issues:
    - Sync logs in the Sync page
    - Supabase logs in dashboard
    - Browser console (F12)
-   - Vercel logs (if deployed)
+   - Self-hosted prod desktop: `C:\apps\ems\logs\app.err.log`, `C:\apps\ems\logs\nightly-sync.log`, and `C:\caddy\caddy.err.log`
 
 2. **Verify Configuration**:
    - Double-check all credentials

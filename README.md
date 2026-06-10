@@ -29,7 +29,7 @@ A comprehensive employee management system that integrates with **SharePoint Exc
 - **Integrations**: 
   - Microsoft Graph API (Azure Entra ID + SharePoint/Excel)
   - NinjaOne API
-- **Deployment**: Vercel (with cron jobs)
+- **Deployment**: TBD — production deployment direction (cloud vs. self-hosted) is on hold pending the Phase 20 decision. The most-developed option in the repo today is self-hosted on a Windows desktop with Caddy + NinjaOne-pushed cert. See [`docs/employee-management-system/20-production-deployment.md`](docs/employee-management-system/20-production-deployment.md) for status.
 
 ## 📋 Requirements
 
@@ -174,16 +174,15 @@ See `supabase/schema.sql` for complete schema details.
 
 ## 🔄 Automated Synchronization
 
-### Using Vercel Cron Jobs (Recommended)
+### Production: Windows Task Scheduler on the self-hosted desktop
 
-The `vercel.json` file can run **NinjaOne** sync on a schedule (e.g. daily at 3:00 AM). Excel sync is typically triggered manually from the Sync page. Deploy to Vercel and cron jobs will run automatically.
+In the current self-hosted deployment, a daily Windows Task Scheduler job at 03:00 on the production desktop runs `scripts\cron\nightly-ninja-sync.ps1`, which POSTs to `https://localhost/api/sync/ninjaone` with `Authorization: Bearer ${SYNC_CRON_SECRET}`. See [`scripts/cron/install-task.ps1`](scripts/cron/install-task.ps1) for the one-time registration command, and Phase 20 doc §20h for context.
 
-### Using Custom Cron Jobs
+### Other platforms
 
-If not using Vercel, set up cron jobs on your server:
+If deploying elsewhere, set up a daily cron that POSTs to `/api/sync/ninjaone` with the `SYNC_CRON_SECRET` bearer token:
 
 ```bash
-# NinjaOne sync (e.g. daily at 3 AM)
 0 3 * * * curl -X POST https://your-domain.com/api/sync/ninjaone \
   -H "Authorization: Bearer YOUR_SYNC_CRON_SECRET"
 ```
@@ -240,30 +239,17 @@ Overview of all modules with quick access cards
 
 ## 🚀 Deployment
 
-### Deploy to Vercel
+> ⚠️ **Status: Phase 20 deployment direction is on hold.** The team has not yet committed to cloud (Azure App Service / Vercel / Cloudflare) vs. self-hosted (the runbook below). The runbook is preserved for if/when the self-hosted option is chosen — see [`docs/employee-management-system/20-production-deployment.md`](docs/employee-management-system/20-production-deployment.md) for the open decision.
 
-1. **Push to GitHub**:
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin <your-github-repo>
-git push -u origin main
-```
+The most-developed option is **self-hosted** on a spare Windows desktop on the Bennett & Pless office LAN, fronted by Caddy at `https://ems.local`. The full step-by-step runbook (desktop prep, Caddy + NSSM service registration, NinjaOne push policies for the root CA + hosts entry, Azure AD redirect URI update, nightly Task Scheduler cron) is in:
 
-2. **Deploy on Vercel**:
-   - Go to [vercel.com](https://vercel.com)
-   - Import your GitHub repository
-   - Add environment variables from your `.env` file
-   - Deploy
+**[docs/employee-management-system/20-production-deployment.md](docs/employee-management-system/20-production-deployment.md)**
 
-3. **Configure Production URLs**:
-   - Update `NEXT_PUBLIC_APP_URL` in Vercel environment variables
+Supporting scripts live under [`scripts/`](scripts/):
 
-4. **Verify Cron Jobs**:
-   - Go to Vercel project settings
-   - Check "Cron Jobs" tab
-   - Verify schedules are active
+- [`scripts/deploy-desktop/`](scripts/deploy-desktop/) — runs on the spare desktop during initial setup
+- [`scripts/ninja-policies/`](scripts/ninja-policies/) — pushed via NinjaOne to all employee machines (cert + hosts entry)
+- [`scripts/cron/`](scripts/cron/) — Windows Task Scheduler job for the nightly NinjaOne sync
 
 ## 🛠️ Customization
 
@@ -286,7 +272,7 @@ To add new integrations:
 
 1. Create integration client in `lib/`
 2. Create sync API route in `app/api/sync/[integration]/route.ts`
-3. Add cron job to `vercel.json`
+3. Add a daily cron either by extending `scripts/cron/nightly-ninja-sync.ps1` or by registering a separate Task Scheduler job (see `scripts/cron/install-task.ps1` as a template)
 4. Update sync page UI
 
 ## 🐛 Troubleshooting

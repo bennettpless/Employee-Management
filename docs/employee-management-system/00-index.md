@@ -37,6 +37,12 @@
 | 18. Exports (Excel / CSV / JSON / PNG / PDF) | [18-network-exports.md](./18-network-exports.md) | ⬜ Pending | — |
 | 19. Docs + Polish | [19-network-docs-polish.md](./19-network-docs-polish.md) | ⬜ Pending | — |
 
+### Infrastructure (cross-cutting, not tied to a feature version)
+
+| Phase | File | Status | Commit |
+|-------|------|--------|--------|
+| 20. Production Deployment | [20-production-deployment.md](./20-production-deployment.md) | ⏸️ On Hold (deployment direction undecided) | — |
+
 ## Status Legend
 - ⬜ Pending
 - 🟡 In Progress
@@ -46,6 +52,8 @@
 ## Current Context
 
 The core v1 application is built and functional (Phases 1-9 and Phase 11 are complete; Phase 10 remains deferred). **v2 is now in progress** — pivoting away from software/license inventory and toward equipment + network mapping across the 11 offices. Phases 12-19 cover the removal of the unused Software/Licenses tabs and the new Network feature (geographic map, per-office topology, manual entry + CSV/XLSX import, optional Auvik sync, full exports). **Phases 12 and 13 are complete**: software/license tables and UI are gone, the network schema (`offices`, `network_devices`, `network_device_connections`) ships in `03_network_schema.sql`, and admins can CRUD offices at `/settings/offices` (with an optional Nominatim geocode button on the address form that progressively falls back to city-level coordinates for streets OSM doesn't have).
+
+**Phase 20 (Production Deployment) is on hold pending a deployment-direction decision.** We have not yet chosen between a **cloud-hosted** route (Azure App Service, Vercel, Cloudflare Tunnel, etc.) and a **self-hosted** route (running EMS on a spare Windows desktop on the office LAN, fronted by Caddy and pushed to clients via NinjaOne). The Phase 20 doc currently describes the self-hosted option in detail because that was the most immediately feasible path when it was written, but it is **not a committed direction** — see the "Decision required" callout at the top of `20-production-deployment.md`. The repo contains scaffolding for the self-hosted option (the deleted `vercel.json`, the `scripts/` directory, self-hosted-flavored edits to `middleware.ts` / `.env.example` / `README.md` / `SETUP_GUIDE.md`); none of it has been executed against any environment. **v2 feature work (Phases 12–19) is not blocked by this** — all of it ships into whichever hosting model we ultimately pick. **One known consequence of removing `vercel.json`:** the nightly NinjaOne sync no longer runs in any environment. That's acceptable today because there is no production environment yet; whoever lands Phase 20 owns standing the cron back up in the chosen environment.
 
 **v2 architectural decisions:**
 - **Software + Licenses tabs are fully removed** (pages, APIs, nav links, dashboard cards, employee-detail Licenses tab, Excel mapper license fields, and DB tables `software`, `device_software`, `licenses`, `license_assignments`).
@@ -97,7 +105,7 @@ The core v1 application is built and functional (Phases 1-9 and Phase 11 are com
 - **Local React state + useEffect** for data fetching, not TanStack Query or Zustand (Phase 4)
 - **Service role Supabase client** for all API mutations, bypassing RLS (Phase 2)
 - **Azure AD SSO** via NextAuth.js for app-wide authentication, domain-restricted to `bennett-pless.com` / `bpl-enclosure.com` (Phase 9)
-- **Vercel cron** for scheduled NinjaOne sync at 03:00 UTC daily (Phase 5)
+- **Scheduled NinjaOne sync** at 03:00 UTC daily (Phase 5) — originally Vercel cron; `vercel.json` is removed pending the Phase 20 deployment-direction decision, so the cron currently does not run anywhere. Whoever lands Phase 20 owns re-establishing it in the chosen hosting environment.
 - **IT Response Agent embedded via iframe** (not React-rebuild) for v1 — accepts the API-key-in-URL trade-off in exchange for getting the full agent UI for free (Phase 11)
 
 ### v2
