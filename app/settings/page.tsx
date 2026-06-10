@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Settings as SettingsIcon, Database, Shield, RefreshCw, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import { ArrowLeft, Settings as SettingsIcon, Database, Shield, RefreshCw, CheckCircle, XCircle, Loader2, Building2, ChevronRight } from 'lucide-react'
 
 interface ServiceStatus {
   name: string
@@ -42,6 +43,10 @@ function StatusBadge({ service }: { service: ServiceStatus | undefined; }) {
 }
 
 export default function SettingsPage() {
+  const { data: session } = useSession()
+  const role = (session?.user as { role?: string } | undefined)?.role
+  const isAdmin = role === 'admin'
+
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
@@ -212,6 +217,34 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Admin Tools */}
+        {isAdmin && (
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Admin Tools</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              <Link
+                href="/settings/offices"
+                className="group bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="bg-blue-100 rounded-lg p-3 mr-4">
+                      <Building2 className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Office Management</h3>
+                      <p className="text-sm text-gray-600">
+                        Manage the 11 offices, addresses, and lat/lng coordinates.
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" />
+                </div>
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Setup Instructions */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-8">

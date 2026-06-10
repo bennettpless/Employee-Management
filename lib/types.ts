@@ -64,3 +64,81 @@ export interface EmployeeWithRelations extends Employee {
   previous_devices?: PreviousDevice[]
 }
 
+export interface Office {
+  id: string
+  name: string
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  state: string | null
+  postal_code: string | null
+  country: string | null
+  latitude: number | null
+  longitude: number | null
+  auvik_network_id: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type NetworkDeviceType =
+  | 'access_point'
+  | 'switch'
+  | 'firewall'
+  | 'server'
+  | 'router'
+  | 'other'
+
+export type NetworkDeviceStatus =
+  | 'online'
+  | 'offline'
+  | 'warning'
+  | 'critical'
+  | 'unknown'
+
+export type NetworkDeviceSource = 'manual' | 'auvik' | 'csv'
+
+export type NetworkLinkType = 'ethernet' | 'fiber' | 'wireless' | 'other'
+
+export interface NetworkDevice {
+  id: string
+  auvik_device_id: string | null
+  office_id: string | null
+  name: string
+  device_type: NetworkDeviceType
+  manufacturer: string | null
+  model: string | null
+  serial_number: string | null
+  firmware_version: string | null
+  management_ip: string | null
+  management_url: string | null
+  mac_address: string | null
+  status: NetworkDeviceStatus
+  last_seen: string | null
+  credentials_vault_ref: string | null
+  notes: string | null
+  source: NetworkDeviceSource
+  is_manually_overridden: boolean
+  last_synced_at: string | null
+  created_at: string
+  updated_at: string
+  office?: Office
+}
+
+export interface NetworkDeviceConnection {
+  id: string
+  source_device_id: string
+  target_device_id: string
+  source_port: string | null
+  target_port: string | null
+  link_type: NetworkLinkType | null
+  auvik_link_id: string | null
+  last_synced_at: string | null
+  created_at: string
+}
+
+export interface NetworkDeviceWithConnections extends NetworkDevice {
+  outgoing_connections?: NetworkDeviceConnection[]
+  incoming_connections?: NetworkDeviceConnection[]
+}
+

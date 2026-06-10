@@ -29,7 +29,7 @@
 | Phase | File | Status | Commit |
 |-------|------|--------|--------|
 | 12. Remove Software + Licenses | [12-software-licenses-removal.md](./12-software-licenses-removal.md) | ✅ Complete | 508bc0a |
-| 13. Network Schema + Offices Admin | [13-network-schema.md](./13-network-schema.md) | ⬜ Pending | — |
+| 13. Network Schema + Offices Admin | [13-network-schema.md](./13-network-schema.md) | ✅ Complete | _pending_ |
 | 14. Network Inventory (Manual + Import) | [14-network-inventory.md](./14-network-inventory.md) | ⬜ Pending | — |
 | 15. Geographic Office Map | [15-network-geo-map.md](./15-network-geo-map.md) | ⬜ Pending | — |
 | 16. Topology Diagrams | [16-network-topology.md](./16-network-topology.md) | ⬜ Pending | — |
@@ -45,7 +45,7 @@
 
 ## Current Context
 
-The core v1 application is built and functional (Phases 1-9 and Phase 11 are complete; Phase 10 remains deferred). **v2 is now in progress** — pivoting away from software/license inventory and toward equipment + network mapping across the 11 offices. Phases 12-19 cover the removal of the unused Software/Licenses tabs and the new Network feature (geographic map, per-office topology, manual entry + CSV/XLSX import, optional Auvik sync, full exports).
+The core v1 application is built and functional (Phases 1-9 and Phase 11 are complete; Phase 10 remains deferred). **v2 is now in progress** — pivoting away from software/license inventory and toward equipment + network mapping across the 11 offices. Phases 12-19 cover the removal of the unused Software/Licenses tabs and the new Network feature (geographic map, per-office topology, manual entry + CSV/XLSX import, optional Auvik sync, full exports). **Phases 12 and 13 are complete**: software/license tables and UI are gone, the network schema (`offices`, `network_devices`, `network_device_connections`) ships in `03_network_schema.sql`, and admins can CRUD offices at `/settings/offices` (with an optional Nominatim geocode button on the address form that progressively falls back to city-level coordinates for streets OSM doesn't have).
 
 **v2 architectural decisions:**
 - **Software + Licenses tabs are fully removed** (pages, APIs, nav links, dashboard cards, employee-detail Licenses tab, Excel mapper license fields, and DB tables `software`, `device_software`, `licenses`, `license_assignments`).
