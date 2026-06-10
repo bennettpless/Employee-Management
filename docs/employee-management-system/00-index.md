@@ -30,7 +30,7 @@
 |-------|------|--------|--------|
 | 12. Remove Software + Licenses | [12-software-licenses-removal.md](./12-software-licenses-removal.md) | ✅ Complete | 508bc0a |
 | 13. Network Schema + Offices Admin | [13-network-schema.md](./13-network-schema.md) | ✅ Complete | 686bd11 |
-| 14. Network Inventory (Manual + Import) | [14-network-inventory.md](./14-network-inventory.md) | ✅ Complete | _(pending commit hash)_ |
+| 14. Network Inventory (Manual + Import) | [14-network-inventory.md](./14-network-inventory.md) | ✅ Complete | 81274c1 |
 | 15. Geographic Office Map | [15-network-geo-map.md](./15-network-geo-map.md) | ⬜ Pending | — |
 | 16. Topology Diagrams | [16-network-topology.md](./16-network-topology.md) | ⬜ Pending | — |
 | 17. Auvik Integration (Optional) | [17-auvik-integration.md](./17-auvik-integration.md) | ⬜ Pending | — |
