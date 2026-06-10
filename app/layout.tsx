@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import SessionWrapper from '@/components/SessionWrapper'
 import AppHeader from '@/components/AppHeader'
 import './globals.css'
+import 'leaflet/dist/leaflet.css'
 
 // Use system font to avoid startup hang from next/font/google fetch
 const fontClass = 'font-sans'

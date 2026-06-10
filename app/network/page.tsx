@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -12,12 +13,14 @@ import {
   Loader2,
   MapPin,
   HardDrive,
+  AlertCircle,
 } from 'lucide-react'
 import {
   DeviceTypeIcon,
   DEVICE_TYPE_LABEL,
   STATUS_BADGE_CLASS,
 } from '@/components/network/NetworkDeviceTable'
+import { aggregateOfficeStats } from '@/lib/network-stats'
 import type {
   NetworkDevice,
   NetworkDeviceStatus,
@@ -25,12 +28,17 @@ import type {
   Office,
 } from '@/lib/types'
 
-interface OfficeWithDeviceCount extends Office {
-  device_count?: number
-}
+// Leaflet touches `window` at import time — load the map on the client only so
+// the production build and any future server-rendered shells don't blow up.
+const OfficeMap = dynamic(() => import('@/components/network/OfficeMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[500px] bg-gray-100 animate-pulse rounded-xl shadow-md" />
+  ),
+})
 
 export default function NetworkDashboardPage() {
-  const [offices, setOffices] = useState<OfficeWithDeviceCount[]>([])
+  const [offices, setOffices] = useState<Office[]>([])
   const [devices, setDevices] = useState<NetworkDevice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -86,32 +94,18 @@ export default function NetworkDashboardPage() {
     return { total: devices.length, byType, byStatus }
   }, [devices])
 
-  const officeStats = useMemo(() => {
-    const map = new Map<
-      string,
-      { count: number; worstStatus: NetworkDeviceStatus | null }
-    >()
-    const STATUS_RANK: Record<NetworkDeviceStatus, number> = {
-      critical: 5,
-      warning: 4,
-      offline: 3,
-      unknown: 2,
-      online: 1,
-    }
-    for (const d of devices) {
-      if (!d.office_id) continue
-      const cur = map.get(d.office_id) ?? { count: 0, worstStatus: null }
-      cur.count += 1
-      if (
-        cur.worstStatus === null ||
-        STATUS_RANK[d.status] > STATUS_RANK[cur.worstStatus]
-      ) {
-        cur.worstStatus = d.status
-      }
-      map.set(d.office_id, cur)
-    }
-    return map
-  }, [devices])
+  const officesWithStats = useMemo(
+    () => aggregateOfficeStats(offices, devices),
+    [offices, devices]
+  )
+
+  const unmappedOffices = useMemo(
+    () =>
+      officesWithStats.filter(
+        (o) => o.latitude === null || o.longitude === null
+      ),
+    [officesWithStats]
+  )
 
   const orphanedCount = devices.filter((d) => !d.office_id).length
 
@@ -240,18 +234,51 @@ export default function NetworkDashboardPage() {
               </div>
             </div>
 
-            {/* Map placeholder */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-8 border-2 border-dashed border-gray-200">
-              <div className="flex items-center gap-3 text-gray-500">
-                <MapPin className="w-5 h-5" />
-                <div>
-                  <h3 className="font-semibold">Geographic Map</h3>
-                  <p className="text-sm">
-                    The Leaflet map of all offices will live here (Phase 15).
-                  </p>
+            {/* Geographic map */}
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+                <MapPin className="w-6 h-6 text-purple-600" />
+                Geographic Map
+              </h2>
+              <p className="text-gray-600 text-sm">
+                Pins are coloured by the worst-status device in each office.
+                Click a pin for details.
+              </p>
+            </div>
+            <div className="mb-8">
+              <OfficeMap offices={officesWithStats} />
+            </div>
+
+            {/* Unmapped offices */}
+            {unmappedOffices.length > 0 && (
+              <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-amber-900 mb-1">
+                      {unmappedOffices.length} office
+                      {unmappedOffices.length === 1 ? '' : 's'} missing
+                      coordinates
+                    </p>
+                    <p className="text-sm text-amber-800 mb-2">
+                      These offices won't appear on the map until latitude and
+                      longitude are set:
+                    </p>
+                    <ul className="text-sm text-amber-900 mb-3 list-disc list-inside space-y-0.5">
+                      {unmappedOffices.map((o) => (
+                        <li key={o.id}>{o.name}</li>
+                      ))}
+                    </ul>
+                    <Link
+                      href="/settings/offices"
+                      className="inline-flex items-center text-sm font-medium text-amber-900 hover:text-amber-700 underline"
+                    >
+                      Fix in office settings &rarr;
+                    </Link>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Office cards */}
             <div className="mb-4">
@@ -275,47 +302,41 @@ export default function NetworkDashboardPage() {
               </div>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {offices.map((office) => {
-                  const counts = officeStats.get(office.id) ?? {
-                    count: 0,
-                    worstStatus: null,
-                  }
-                  return (
-                    <Link
-                      key={office.id}
-                      href={`/network/offices/${office.id}`}
-                      className="group bg-white rounded-xl shadow-md p-6 hover:shadow-lg hover:border-blue-300 border border-transparent transition-all"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-5 h-5 text-blue-600" />
-                          <h3 className="font-semibold text-gray-900 group-hover:text-blue-700">
-                            {office.name}
-                          </h3>
-                        </div>
-                        {counts.worstStatus && (
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-medium border capitalize ${STATUS_BADGE_CLASS[counts.worstStatus]}`}
-                            title={`Worst-status device in this office: ${counts.worstStatus}`}
-                          >
-                            {counts.worstStatus}
-                          </span>
-                        )}
+                {officesWithStats.map((office) => (
+                  <Link
+                    key={office.id}
+                    href={`/network/offices/${office.id}`}
+                    className="group bg-white rounded-xl shadow-md p-6 hover:shadow-lg hover:border-blue-300 border border-transparent transition-all"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-blue-600" />
+                        <h3 className="font-semibold text-gray-900 group-hover:text-blue-700">
+                          {office.name}
+                        </h3>
                       </div>
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-1">
-                        {[office.city, office.state].filter(Boolean).join(', ') ||
-                          'No address on file'}
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-gray-700">
-                        <HardDrive className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{counts.count}</span>
-                        <span className="text-gray-500">
-                          device{counts.count === 1 ? '' : 's'}
+                      {office.deviceCount > 0 && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium border capitalize ${STATUS_BADGE_CLASS[office.worstStatus]}`}
+                          title={`Worst-status device in this office: ${office.worstStatus}`}
+                        >
+                          {office.worstStatus}
                         </span>
-                      </div>
-                    </Link>
-                  )
-                })}
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-1">
+                      {[office.city, office.state].filter(Boolean).join(', ') ||
+                        'No address on file'}
+                    </p>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <HardDrive className="w-4 h-4 text-gray-400" />
+                      <span className="font-medium">{office.deviceCount}</span>
+                      <span className="text-gray-500">
+                        device{office.deviceCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
               </div>
             )}
 
