@@ -1,0 +1,49 @@
+---
+description: Safely install npm packages and recover the Next.js dev server
+alwaysApply: true
+---
+
+# Next.js Dev Server: Install + Recovery Rules
+
+This project uses `next dev` (Next.js 14 App Router). Webpack's dev cache corrupts easily if you change `node_modules` while the dev server is running. Symptoms: the browser loads the HTML document but every asset 404s (`/_next/static/css/app/layout.css`, `main-app.js`, page chunks…) — the page renders as bare unstyled HTML. The dev-server terminal will usually show `Cannot find module './NNN.js'` (`MODULE_NOT_FOUND`) before it dies.
+
+## Before installing or upgrading any npm package
+
+If a `next dev` / `npm run dev` / `npm run dev:clean` process is running:
+
+1. Stop the dev server (Ctrl+C in its terminal, or kill the `node.exe` PID).
+2. Run the install: `npm install <pkg>` or `npm install -D <pkg>`.
+3. Restart with the clean script — it deletes `.next/` first:
+   ```bash
+   npm run dev:clean
+   ```
+
+Never run `npm install` while `next dev` is live, even for "small" additions. The cache corruption is silent at install time and only surfaces on the next page request.
+
+## Recovery: page is rendering as bare HTML / 404s on `/_next/static/*`
+
+1. Stop every Next dev server (look in the terminals folder for any `next dev` / `dev:clean` processes; multiple zombies on ports 3000/3001/3002 are common after a crash).
+2. Free port 3000 if a zombie `node.exe` is holding it:
+   ```powershell
+   netstat -ano | findstr ":3000 " | findstr LISTENING
+   taskkill /F /PID <pid>
+   ```
+3. Start fresh:
+   ```bash
+   npm run dev:clean
+   ```
+4. Hard-reload the browser tab (Ctrl+F5) to bypass cached 404 responses.
+
+## Why `dev:clean` and not plain `dev`
+
+`package.json` defines:
+
+```json
+"dev:clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\" && next dev"
+```
+
+Prefer it over `npm run dev` whenever any of these are true:
+- You just installed, upgraded, or removed a dependency.
+- The previous dev server crashed or was killed mid-compile.
+- The previous run hit `MODULE_NOT_FOUND` for a numbered chunk (e.g. `./276.js`).
+- Static assets under `/_next/static/*` are 404ing.
