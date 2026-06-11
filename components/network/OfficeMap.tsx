@@ -67,18 +67,51 @@ function buildIcon(status: NetworkDeviceStatus): L.DivIcon {
 }
 
 /**
- * Calls `map.fitBounds()` whenever the set of mappable offices changes.
+ * Forces Leaflet to recompute the container size and then fits bounds to all
+ * mappable offices. Two failure modes this guards against:
+ *
+ *   1. Container size measured at zero. Under `next/dynamic` with `ssr: false`,
+ *      Leaflet can measure its container before the surrounding DOM lays out.
+ *      `invalidateSize()` is the documented fix.
+ *
+ *   2. `fitBounds` called too early. `MapContainer` initialises with the props
+ *      it receives on first render — which in this app is an empty `offices`
+ *      array, because data is fetched client-side. By the time the data
+ *      arrives, the map has already settled at `DEFAULT_CENTER`/`DEFAULT_ZOOM`,
+ *      and we have to re-fit explicitly.
+ *
  * Must live inside `<MapContainer>` so `useMap()` resolves to the right map.
  */
 function FitBounds({ offices }: { offices: MappableOffice[] }) {
   const map = useMap()
+
   useEffect(() => {
-    if (offices.length < 2) return
-    const bounds = L.latLngBounds(
-      offices.map((o) => [o.latitude, o.longitude] as [number, number])
-    )
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
+    // Run on the next tick so any pending layout flushes first; otherwise the
+    // map's internal pixel origin can be derived from a stale container size.
+    const id = window.setTimeout(() => {
+      map.invalidateSize()
+      if (offices.length === 0) return
+      if (offices.length === 1) {
+        map.setView(
+          [offices[0].latitude, offices[0].longitude],
+          SINGLE_OFFICE_ZOOM
+        )
+        return
+      }
+      const bounds = L.latLngBounds(
+        offices.map((o) => [o.latitude, o.longitude] as [number, number])
+      )
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [map, offices])
+
+  useEffect(() => {
+    const handler = () => map.invalidateSize()
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [map])
+
   return null
 }
 
@@ -116,7 +149,7 @@ export default function OfficeMap({ offices }: OfficeMapProps) {
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{y}/{x}.png"
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBounds offices={mappable} />
       {mappable.map((office) => (

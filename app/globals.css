@@ -51,5 +51,19 @@ body {
   background: #94a3b8;
 }
 
+/*
+ * Leaflet ↔ Tailwind preflight reset fix.
+ *
+ * Tailwind's `@tailwind base` applies `max-width: 100%` to every <img>. Leaflet
+ * renders tiles as <img> elements inside `.leaflet-map-pane`, which is a 0×0
+ * absolutely-positioned containing block — so `max-width: 100%` resolves to
+ * `max-width: 0`, clamping every tile to invisible / mis-sized. The result is
+ * broken-looking tiles that don't line up and markers that visually drift away
+ * from their geographic positions. Undo the preflight rule inside the map only.
+ */
+.leaflet-container img {
+  max-width: none !important;
+}
+
 
 
