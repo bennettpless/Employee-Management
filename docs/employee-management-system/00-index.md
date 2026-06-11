@@ -33,7 +33,7 @@
 | 14. Network Inventory (Manual + Import) | [14-network-inventory.md](./14-network-inventory.md) | ✅ Complete | 81274c1 |
 | 15. Geographic Office Map | [15-network-geo-map.md](./15-network-geo-map.md) | ✅ Complete | 39eac75 |
 | 16. Topology Diagrams | [16-network-topology.md](./16-network-topology.md) | ✅ Complete | 26b1f47 |
-| 17. Auvik Integration (Optional) | [17-auvik-integration.md](./17-auvik-integration.md) | ✅ Complete | — |
+| 17. Auvik Integration (Optional) | [17-auvik-integration.md](./17-auvik-integration.md) | ✅ Complete | 13bcee3 |
 | 18. Exports (Excel / CSV / JSON / PNG / PDF) | [18-network-exports.md](./18-network-exports.md) | ⬜ Pending | — |
 | 19. Docs + Polish | [19-network-docs-polish.md](./19-network-docs-polish.md) | ⬜ Pending | — |
 
