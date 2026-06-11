@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import dynamic from 'next/dynamic'
 import {
   ArrowLeft,
   Building2,
@@ -11,10 +12,8 @@ import {
   Loader2,
   Edit2,
   MapPin,
-  Workflow,
   Download,
   Upload,
-  Network as NetworkIcon,
 } from 'lucide-react'
 import NetworkDeviceTable from '@/components/network/NetworkDeviceTable'
 import NetworkDeviceForm, {
@@ -24,6 +23,19 @@ import NetworkDeviceForm, {
   type NetworkDeviceFormState,
 } from '@/components/network/NetworkDeviceForm'
 import type { NetworkDevice, Office } from '@/lib/types'
+
+// React Flow ships its own CSS and uses `window`/`document` extensively, so
+// load the topology component on the client only — matches the same pattern
+// used for the Leaflet `OfficeMap` on the network dashboard.
+const OfficeTopology = dynamic(
+  () => import('@/components/network/OfficeTopology'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[600px] bg-gray-100 animate-pulse rounded-xl shadow-md" />
+    ),
+  }
+)
 
 interface OfficeWithDeviceCount extends Office {
   device_count?: number
@@ -288,21 +300,13 @@ export default function OfficeNetworkPage() {
           deletingId={deletingId}
         />
 
-        {/* Topology placeholder */}
-        <div className="bg-white rounded-xl shadow-md p-6 mt-8 border-2 border-dashed border-gray-200">
-          <div className="flex items-center gap-3 text-gray-500">
-            <Workflow className="w-5 h-5" />
-            <div>
-              <h3 className="font-semibold flex items-center gap-2">
-                <NetworkIcon className="w-4 h-4" />
-                Topology Diagram
-              </h3>
-              <p className="text-sm">
-                The React Flow topology of this office will live here (Phase
-                16).
-              </p>
-            </div>
-          </div>
+        {/* Topology diagram */}
+        <div className="mt-8">
+          <OfficeTopology
+            officeId={officeId}
+            officeName={office.name}
+            canEdit={isAdmin}
+          />
         </div>
       </div>
 

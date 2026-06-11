@@ -3,6 +3,7 @@ import SessionWrapper from '@/components/SessionWrapper'
 import AppHeader from '@/components/AppHeader'
 import './globals.css'
 import 'leaflet/dist/leaflet.css'
+import '@xyflow/react/dist/style.css'
 
 // Use system font to avoid startup hang from next/font/google fetch
 const fontClass = 'font-sans'

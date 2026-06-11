@@ -121,6 +121,8 @@ CREATE TABLE network_devices (
     source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('manual', 'auvik', 'csv')),
     is_manually_overridden BOOLEAN DEFAULT FALSE,
     last_synced_at TIMESTAMP WITH TIME ZONE,
+    layout_x DECIMAL, -- per-office React Flow node position (NULL = auto-layout)
+    layout_y DECIMAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

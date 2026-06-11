@@ -120,6 +120,11 @@ export interface NetworkDevice {
   source: NetworkDeviceSource
   is_manually_overridden: boolean
   last_synced_at: string | null
+  // Per-office React Flow topology position. NULL on devices that haven't been
+  // laid out yet (the topology API auto-places those). Stored as DECIMAL in
+  // Postgres; Supabase returns the value as a number for narrow DECIMALs.
+  layout_x: number | null
+  layout_y: number | null
   created_at: string
   updated_at: string
   office?: Office
