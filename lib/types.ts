@@ -43,7 +43,7 @@ export interface Device {
 
 export interface SyncLog {
   id: string
-  sync_type: 'entra_id' | 'ninjaone' | 'intune' | 'excel'
+  sync_type: 'entra_id' | 'ninjaone' | 'intune' | 'auvik' | 'excel'
   status: 'success' | 'partial' | 'failed'
   records_synced: number
   records_failed: number

@@ -9,10 +9,11 @@ This guide walks you through every step of setting up the Employee Management Sy
 4. [Microsoft Azure / SharePoint Setup](#microsoft-azure--sharepoint-setup)
 5. [NinjaOne Setup](#ninjaone-setup)
 6. [Application Configuration](#application-configuration)
-7. [First Data Sync](#first-data-sync)
-8. [Production Deployment](#production-deployment)
-9. [Troubleshooting](#troubleshooting)
-10. [Optional: Azure Entra ID](#optional-azure-entra-id)
+7. [Auvik Setup (Optional, Phase 17)](#auvik-setup-optional-phase-17)
+8. [First Data Sync](#first-data-sync)
+9. [Production Deployment](#production-deployment)
+10. [Troubleshooting](#troubleshooting)
+11. [Optional: Azure Entra ID](#optional-azure-entra-id)
 
 ## Prerequisites
 
@@ -346,6 +347,53 @@ After `npm run dev`:
 - Click the card — `/response-agent` loads the agent's `review.html` in a full-height iframe
 - If the iframe is blank or the badge never appears, check the browser console for CORS errors (means `PORTAL_ORIGIN` is wrong on the agent)
 - If you see "IT Response Agent not configured" on `/response-agent`, the env vars aren't set
+
+## Auvik Setup (Optional, Phase 17)
+
+The Auvik integration is **optional**. When it's not configured, the Network tab continues to work via manual entry + CSV/XLSX import (Phase 14). When it is configured, Auvik becomes the primary network data source for `network_devices` and `network_device_connections`, and the sync respects the `is_manually_overridden` flag so hand-edited rows are never clobbered.
+
+### Step 1: Generate an Auvik API key
+
+1. Log in to Auvik at `https://<your-tenant>.my.auvik.com` — the subdomain (the part before `.my.auvik.com`) is your `AUVIK_TENANT_DOMAIN`. For Bennett & Pless, that value is `bennettpless`.
+2. Go to **My Profile → API Keys** (top-right user menu → My Profile → API Keys tab). On some plans this lives under **Discovery → Manage API Access** instead.
+3. Click **Generate API Key**. Auvik will show:
+   - The API user (your email or a service-account email) — this is `AUVIK_API_USER`.
+   - The API key (a long token shown only once — copy it immediately) — this is `AUVIK_API_KEY`.
+4. **Recommended**: create a dedicated read-only API user under **Settings → Users → Add User** with the `Read-Only` role and use that user's API key. This keeps the integration auditable and revocable without affecting personal logins.
+5. If your Auvik plan doesn't expose API key generation, contact Auvik support — the API is included on most paid tiers but may need to be enabled.
+
+### Step 2: Add the env vars
+
+Add these to `.env.local` (and to your production environment):
+
+```bash
+AUVIK_API_USER=api-user@example.com
+AUVIK_API_KEY=...long-token-from-step-1...
+AUVIK_TENANT_DOMAIN=bennettpless
+```
+
+`AUVIK_API_BASE_URL` is an optional override — only set it if Auvik's API for your tenant uses a region-host pattern like `https://auvikapi.us1.my.auvik.com/v1` instead of the default `https://api.{tenant}.my.auvik.com/v1`.
+
+Restart the dev server (or redeploy) after adding the vars.
+
+### Step 3: Map each office to its Auvik network ID
+
+Each Auvik network (≈ one site/office in our model) needs to be linked to an EMS office for the sync to update its devices. In Auvik, open a network and copy its ID from the URL or the network detail page.
+
+In EMS, go to **Settings → Office Management** and edit each office. Paste the Auvik network ID into the **Auvik Network ID** field and save.
+
+Auvik networks that don't match any office's `auvik_network_id` are logged as warnings in the Auvik sync's `sync_logs.error_message` column and skipped — they never block the rest of the sync.
+
+### Step 4: Verify the sync
+
+1. Navigate to **/sync** — you should see a new "Sync from Auvik" card (purple, between NinjaOne and Intune).
+2. Click **Sync from Auvik**. The card will show a per-run summary: networks processed, devices upserted, devices skipped (overridden or unmapped device-type), connections upserted, etc.
+3. Check **/network** — Auvik-sourced devices have `source = 'auvik'` and `last_synced_at` populated. They appear alongside any manual or CSV-imported devices in the per-office tables.
+4. To confirm the manual-override behaviour: edit any device on **/network/offices/[id]**, set "Manually Overridden" to true, run the Auvik sync again, and verify the row's `last_synced_at` did **not** change.
+
+### Cron schedule
+
+When deployed on Vercel, [`vercel.json`](./vercel.json) registers a daily cron at **04:00 UTC** that hits `/api/network/sync/auvik` (alongside the existing 03:00 UTC NinjaOne cron). For other deployments, add a daily cron that POSTs to `/api/network/sync/auvik` with an `Authorization: Bearer ${SYNC_CRON_SECRET}` header — same auth pattern as the NinjaOne cron.
 
 ## First Data Sync
 

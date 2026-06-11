@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useSession } from 'next-auth/react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import {
@@ -38,10 +39,17 @@ const OfficeMap = dynamic(() => import('@/components/network/OfficeMap'), {
 })
 
 export default function NetworkDashboardPage() {
+  const { data: session } = useSession()
+  const role = (session?.user as { role?: string } | undefined)?.role
+  const isAdmin = role === 'admin'
+
   const [offices, setOffices] = useState<Office[]>([])
   const [devices, setDevices] = useState<NetworkDevice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [auvikConfigured, setAuvikConfigured] = useState<boolean | null>(null)
+  const [auvikSyncing, setAuvikSyncing] = useState(false)
+  const [auvikMessage, setAuvikMessage] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -70,6 +78,55 @@ export default function NetworkDashboardPage() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const checkAuvik = async () => {
+      try {
+        const res = await fetch('/api/network/sync/auvik', { cache: 'no-store' })
+        if (!res.ok) {
+          if (!cancelled) setAuvikConfigured(false)
+          return
+        }
+        const data = await res.json()
+        if (!cancelled) setAuvikConfigured(Boolean(data.configured))
+      } catch {
+        if (!cancelled) setAuvikConfigured(false)
+      }
+    }
+    checkAuvik()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleAuvikSync = async () => {
+    if (auvikSyncing) return
+    setAuvikSyncing(true)
+    setAuvikMessage(null)
+    try {
+      const res = await fetch('/api/network/sync/auvik', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Auvik sync failed')
+      }
+      setAuvikMessage(
+        `Sync complete: ${data.devicesUpserted ?? 0} devices, ${data.connectionsUpserted ?? 0} connections in ${data.duration ?? 0}s.`
+      )
+      const [officesRes, devicesRes] = await Promise.all([
+        fetch('/api/network/offices'),
+        fetch('/api/network/devices'),
+      ])
+      const officesData = await officesRes.json()
+      const devicesData = await devicesRes.json()
+      if (officesRes.ok) setOffices(officesData.offices ?? [])
+      if (devicesRes.ok) setDevices(devicesData.devices ?? [])
+    } catch (err) {
+      setAuvikMessage(err instanceof Error ? err.message : 'Auvik sync failed')
+    } finally {
+      setAuvikSyncing(false)
+    }
+  }
 
   const stats = useMemo(() => {
     const byType: Record<NetworkDeviceType, number> = {
@@ -147,14 +204,30 @@ export default function NetworkDashboardPage() {
                 <Download className="w-4 h-4" />
                 Export all
               </button>
-              <button
-                disabled
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-500 rounded-lg text-sm cursor-not-allowed"
-                title="Available in Phase 17"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Sync Auvik
-              </button>
+              {isAdmin && auvikConfigured && (
+                <button
+                  onClick={handleAuvikSync}
+                  disabled={auvikSyncing}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors text-sm"
+                >
+                  {auvikSyncing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  {auvikSyncing ? 'Syncing Auvik...' : 'Sync Auvik'}
+                </button>
+              )}
+              {isAdmin && auvikConfigured === false && (
+                <button
+                  disabled
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-500 rounded-lg text-sm cursor-not-allowed"
+                  title="Set AUVIK_API_USER, AUVIK_API_KEY, and AUVIK_TENANT_DOMAIN to enable Auvik sync"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Sync Auvik
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -163,6 +236,12 @@ export default function NetworkDashboardPage() {
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
             <p className="font-medium">Failed to load network data</p>
             <p>{error}</p>
+          </div>
+        )}
+
+        {auvikMessage && (
+          <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-800">
+            {auvikMessage}
           </div>
         )}
 

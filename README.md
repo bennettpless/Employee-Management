@@ -133,6 +133,11 @@ NINJA_CLIENT_ID=your-ninja-client-id
 NINJA_CLIENT_SECRET=your-ninja-client-secret
 NINJA_REGION=us
 
+# Auvik (Phase 17, OPTIONAL — leave unset to disable the network sync)
+# AUVIK_API_USER=api-user@example.com
+# AUVIK_API_KEY=long-token-from-auvik
+# AUVIK_TENANT_DOMAIN=your-tenant-subdomain
+
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 SYNC_CRON_SECRET=your-random-secret-for-cron-jobs
@@ -186,6 +191,15 @@ If deploying elsewhere, set up a daily cron that POSTs to `/api/sync/ninjaone` w
 0 3 * * * curl -X POST https://your-domain.com/api/sync/ninjaone \
   -H "Authorization: Bearer YOUR_SYNC_CRON_SECRET"
 ```
+
+If you've also configured Auvik (`AUVIK_API_USER` / `AUVIK_API_KEY` / `AUVIK_TENANT_DOMAIN`), add a second daily cron one hour later for the network sync:
+
+```bash
+0 4 * * * curl -X POST https://your-domain.com/api/network/sync/auvik \
+  -H "Authorization: Bearer YOUR_SYNC_CRON_SECRET"
+```
+
+When deployed on Vercel, both cron entries are already wired up in [`vercel.json`](./vercel.json).
 
 ## 📱 Pages Overview
 

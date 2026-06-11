@@ -1,6 +1,6 @@
 # Phase 17: Auvik Integration (Optional)
 
-## Status: ⬜ Pending
+## Status: ✅ Complete
 
 ## Overview
 
@@ -151,4 +151,27 @@ const AUVIK_STATUS_MAP: Record<string, NetworkDeviceStatus> = {
 - [ ] Rate-limit backoff: simulate a `429` response and verify the client waits + retries
 
 ## Implementation Notes
-_Added during/after implementation. Document the actual Auvik device-type values returned by your tenant so the mapping table can be refined._
+
+Implemented per spec. Key decisions and deviations from the plan:
+
+- **`lib/auvik.ts`** mirrors the lazy-init pattern of `lib/ninjaone.ts`. The class uses HTTP Basic auth (base64 of `AUVIK_API_USER:AUVIK_API_KEY`), JSON:API cursor pagination via `links.next`, and a `429`-aware retry helper that respects `Retry-After` (default 30s) up to 3 attempts. The four required methods are implemented: `listNetworks()`, `listDevices(networkId?)`, `getDeviceDetail(id)`, and `listConnections(networkId?)`.
+- **`AUVIK_API_BASE_URL` escape hatch** — the spec hard-codes the base URL as `https://api.{tenant}.my.auvik.com/v1`, but Auvik's public API actually uses a region-host pattern in some configurations (e.g. `https://auvikapi.us1.my.auvik.com/v1`). To avoid breaking on tenants where the spec's URL doesn't resolve, the client accepts an optional `AUVIK_API_BASE_URL` env var that overrides the computed URL. Operators discovering URL issues can set this without a code change. Added to `.env.example` and `lib/env.ts`'s optional vars list.
+- **Status endpoint added (`GET /api/network/sync/auvik`)** — beyond the spec'd `POST` route, the same path also serves a lightweight `GET` that returns `{ configured, lastSync }`. The Sync, Settings, and Network pages all hit this endpoint at mount to decide whether to render Auvik UI. Without it, the client would have no way to ask "is Auvik configured?" without exposing the env var directly.
+- **Sync algorithm** matches the spec: list networks → match each to `offices.auvik_network_id` (skip + log if no match) → list devices per matched network → upsert into `network_devices` keyed on `auvik_device_id`, **honoring `is_manually_overridden = true` by skipping** → list connections per network and upsert into `network_device_connections` keyed on `auvik_link_id`. The route returns `{ networksProcessed, networksSkipped, devicesUpserted, devicesSkipped, devicesFailed, connectionsUpserted, connectionsSkipped, connectionsFailed, errors, duration }`.
+- **Connection conflict handling** — the schema enforces a `UNIQUE(source_device_id, target_device_id, source_port, target_port)`. If a manual edge already covers the same physical link, a fresh insert hits `23505`; the route catches this and falls back to `UPDATE … WHERE` matching the four columns to attach the `auvik_link_id` to the existing row instead of failing the whole sync.
+- **Manual-override pre-check** — to honour `is_manually_overridden` without an extra round trip per device, the route batch-loads existing rows by `auvik_device_id` once per network and consults the in-memory map.
+- **Auth strategy** matches NinjaOne's: `Bearer ${SYNC_CRON_SECRET}` from cron OR an authenticated admin session. Returns `503` if Auvik isn't configured, `401` if neither auth path passes.
+- **UI gating** — the Auvik card on `/sync`, the Auvik status card on `/settings`, and the "Sync Auvik" button on `/network` all probe `GET /api/network/sync/auvik` at mount and conditionally render based on `data.configured`. With env vars unset, no Auvik UI is visible anywhere; with vars set, all three surfaces light up. The `/network` button additionally checks `isAdmin` so non-admins can't trigger a sync from the dashboard.
+- **`vercel.json` restored** — the file was deleted during the Phase 20 deployment-direction discussion. This phase needed it for the cron registration spec'd here, so it's been recreated with both the existing NinjaOne 03:00 UTC cron and the new Auvik 04:00 UTC cron. If Phase 20 ultimately picks a non-Vercel deployment, this file can be deleted again — neither cron path is _required_ to live in `vercel.json` specifically (both can be driven by Windows Task Scheduler on the self-hosted desktop, as the existing `scripts/cron/install-task.ps1` does).
+- **Device-type mapping** uses the table from the spec verbatim. The map covers `accessPoint` / `switch` / `l3Switch` / `firewall` / `router` / `server` / `hypervisor`. Unmapped Auvik device types (printers, VoIP phones, workstations, etc.) are intentionally **skipped** rather than coerced to `'other'`, with a per-device warning recorded in `sync_logs.error_message`. **TODO during real-world testing**: capture the actual `deviceType` strings returned by the Bennett & Pless tenant and refine `AUVIK_DEVICE_TYPE_MAP` in `lib/auvik.ts` if needed (the open question in `00-index.md` tracks this).
+- **Status mapping** also matches the spec, with `up`/`online` both → `'online'` and `down`/`offline` both → `'offline'` (Auvik docs show `up`/`down` while some endpoints show `online`/`offline`; both are safe to map identically).
+- **Sync log type extended** — `lib/types.ts` `SyncLog.sync_type` already had room for `'auvik'` because the DB constraint was extended in the Phase 13 migration; added the literal to the TS union for type safety.
+- **Build verification** — `npm run build` passes cleanly. The pre-existing `DYNAMIC_SERVER_USAGE` warnings on `/api/network/topology`, `/api/devices`, `/api/employees`, and `/api/devices/available` are unchanged by this phase.
+
+### Operator setup checklist after merge
+
+1. Add `AUVIK_API_USER`, `AUVIK_API_KEY`, `AUVIK_TENANT_DOMAIN` to `.env.local` (and to whichever production env Phase 20 chooses).
+2. Generate the API key in Auvik via **My Profile → API Keys** (recommend a dedicated read-only service-account user — see SETUP_GUIDE.md §"Auvik Setup").
+3. Edit each office under **Settings → Office Management** and paste in the office's Auvik network ID.
+4. Trigger a manual sync from `/sync` to verify connectivity. Inspect `sync_logs.error_message` for any "no matching office" warnings or unmapped-device-type warnings.
+5. If the operator's Auvik tenant uses the region-host API pattern instead of the default, set `AUVIK_API_BASE_URL` to the full base URL (e.g. `https://auvikapi.us1.my.auvik.com/v1`).

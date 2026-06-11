@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, RefreshCw, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, RefreshCw, CheckCircle, XCircle, AlertCircle, Loader2, Network as NetworkIcon } from 'lucide-react'
 import { SyncLog } from '@/lib/types'
 import { format } from 'date-fns'
 
@@ -16,11 +16,35 @@ export default function SyncPage() {
   const [intuneResult, setIntuneResult] = useState<any>(null)
   const [assigning, setAssigning] = useState(false)
   const [assignResult, setAssignResult] = useState<any>(null)
+  const [auvikConfigured, setAuvikConfigured] = useState<boolean | null>(null)
+  const [auvikSyncing, setAuvikSyncing] = useState(false)
+  const [auvikResult, setAuvikResult] = useState<any>(null)
 
   useEffect(() => {
     fetchSyncLogs()
     const interval = setInterval(fetchSyncLogs, 5000)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const checkAuvik = async () => {
+      try {
+        const res = await fetch('/api/network/sync/auvik', { cache: 'no-store' })
+        if (!res.ok) {
+          if (!cancelled) setAuvikConfigured(false)
+          return
+        }
+        const data = await res.json()
+        if (!cancelled) setAuvikConfigured(Boolean(data.configured))
+      } catch {
+        if (!cancelled) setAuvikConfigured(false)
+      }
+    }
+    checkAuvik()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const fetchSyncLogs = async () => {
@@ -126,6 +150,26 @@ export default function SyncPage() {
       alert(`Seed failed: ${error.message}`)
     } finally {
       setSeeding(false)
+    }
+  }
+
+  const handleAuvikSync = async () => {
+    if (auvikSyncing) return
+    setAuvikSyncing(true)
+    setAuvikResult(null)
+    try {
+      const response = await fetch('/api/network/sync/auvik', { method: 'POST' })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to sync from Auvik')
+      }
+      setAuvikResult(result)
+      await fetchSyncLogs()
+    } catch (error: any) {
+      console.error('Error syncing Auvik:', error)
+      alert(`Auvik sync failed: ${error.message}`)
+    } finally {
+      setAuvikSyncing(false)
     }
   }
 
@@ -247,6 +291,79 @@ export default function SyncPage() {
             )}
           </button>
         </div>
+
+        {/* Auvik Sync (Phase 17, optional — only renders when configured) */}
+        {auvikConfigured && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8 border-l-4 border-purple-500">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <NetworkIcon className="w-5 h-5 text-purple-600" />
+                Sync from Auvik
+              </h3>
+              <p className="text-sm text-gray-600">
+                Pull network devices and topology connections from Auvik. Each
+                Auvik network maps to an office via the office&apos;s Auvik
+                Network ID. Devices flagged as &quot;manually overridden&quot;
+                are never modified by this sync. Runs daily at 4:00 AM UTC.
+              </p>
+            </div>
+            <button
+              onClick={handleAuvikSync}
+              disabled={auvikSyncing || syncing || seeding}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors font-medium text-lg"
+            >
+              {auvikSyncing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Syncing from Auvik...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Sync from Auvik
+                </>
+              )}
+            </button>
+            {auvikResult && (
+              <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg text-sm">
+                <p className="font-semibold text-purple-800 mb-1">
+                  Auvik sync complete ({auvikResult.duration}s)
+                </p>
+                <ul className="text-purple-700 space-y-1">
+                  <li>Networks processed: {auvikResult.networksProcessed}</li>
+                  {auvikResult.networksSkipped > 0 && (
+                    <li className="text-amber-600">
+                      Networks skipped (no matching office): {auvikResult.networksSkipped}
+                    </li>
+                  )}
+                  <li>Devices upserted: {auvikResult.devicesUpserted}</li>
+                  {auvikResult.devicesSkipped > 0 && (
+                    <li>Devices skipped (overridden / unmapped type): {auvikResult.devicesSkipped}</li>
+                  )}
+                  {auvikResult.devicesFailed > 0 && (
+                    <li className="text-red-600">Devices failed: {auvikResult.devicesFailed}</li>
+                  )}
+                  <li>Connections upserted: {auvikResult.connectionsUpserted}</li>
+                  {auvikResult.connectionsFailed > 0 && (
+                    <li className="text-red-600">Connections failed: {auvikResult.connectionsFailed}</li>
+                  )}
+                </ul>
+                {auvikResult.errors && auvikResult.errors.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-amber-600 font-medium">
+                      View warnings ({auvikResult.errors.length})
+                    </summary>
+                    <ul className="mt-1 text-xs text-gray-700 space-y-0.5 max-h-40 overflow-y-auto">
+                      {auvikResult.errors.map((e: string, i: number) => (
+                        <li key={i}>{e}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Intune/Entra Sync */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8 border-l-4 border-teal-500">
@@ -398,7 +515,13 @@ export default function SyncPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-1">
                           <h4 className="font-semibold text-gray-900">
-                            {log.sync_type === 'ninjaone' ? 'NinjaOne' : log.sync_type === 'intune' ? 'Intune / Entra' : log.sync_type.toUpperCase()}
+                            {log.sync_type === 'ninjaone'
+                              ? 'NinjaOne'
+                              : log.sync_type === 'intune'
+                              ? 'Intune / Entra'
+                              : log.sync_type === 'auvik'
+                              ? 'Auvik'
+                              : log.sync_type.toUpperCase()}
                           </h4>
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                             log.status === 'success' ? 'bg-green-100 text-green-800' :
