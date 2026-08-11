@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, Pencil, Search, Users } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Search, UserPlus, Users } from 'lucide-react'
 import EmployeeFormModal, {
   type EmployeeEditValues,
 } from '@/components/employees/EmployeeFormModal'
+import EmployeeCreateModal from '@/components/employees/EmployeeCreateModal'
 
 interface EmployeeRow extends EmployeeEditValues {
   devices?: Array<{ count: number }>
@@ -16,6 +17,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [editing, setEditing] = useState<EmployeeRow | null>(null)
+  const [adding, setAdding] = useState(false)
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -76,9 +78,19 @@ export default function EmployeesPage() {
               <p className="text-gray-600 max-w-2xl">
                 Active employees from onboarding sync. New hires are added here
                 automatically; use Edit to fix name or email typos. Offboarding
-                sync removes departed employees from this list.
+                sync removes departed employees from this list. Use Add
+                Employee for exceptions the sync missed, such as merger
+                additions.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Employee
+            </button>
           </div>
         </div>
 
@@ -177,6 +189,18 @@ export default function EmployeesPage() {
           </div>
         )}
       </div>
+
+      {adding && (
+        <EmployeeCreateModal
+          onClose={() => setAdding(false)}
+          onCreated={(created) => {
+            setAdding(false)
+            // Open the edit modal right away so devices can be assigned
+            setEditing(created)
+            void fetchEmployees()
+          }}
+        />
+      )}
 
       {editing && (
         <EmployeeFormModal
