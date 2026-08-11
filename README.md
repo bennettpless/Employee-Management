@@ -294,12 +294,10 @@ This project is proprietary software for internal company use.
 
 ## 🎯 Future Enhancements
 
-Potential features to add:
+Potential features to add (nothing on this list is currently planned — Phase 10 was closed in the post-v2 triage):
 - [ ] Role-based access control beyond the admin/user split
-- [ ] Export employees to CSV/Excel
 - [ ] Advanced reporting and analytics
 - [ ] Custom fields per employee
-- [ ] Tickets UI (schema exists; see Phase 10)
 - [ ] Mobile app
 
 ## 📎 Optional: Azure Entra ID

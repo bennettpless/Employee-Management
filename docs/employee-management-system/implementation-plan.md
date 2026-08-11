@@ -246,16 +246,16 @@ This Next.js 14 (App Router) application was repositioned from "employee + softw
 | 9.5 | Define and implement roles (Viewer, Operator, Admin) | ⬜ Not done |
 
 ### Phase 10: Deferred Features
-> **Status: ⬜ Not Started — Out of Scope for v1**
+> **Status: ✅ Closed (2026-08-11)** — see [10-deferred-features.md](./10-deferred-features.md) for the item-by-item resolution
 
 | Step | Description | Status |
 |------|-------------|--------|
-| 10.1 | Tickets page — surface `tickets` table in UI with list/detail views | ⬜ Not done |
-| 10.2 | Tickets API — CRUD endpoints for ticket data | ⬜ Not done |
-| 10.3 | Ticket sync — wire NinjaOne `getTickets` to populate `tickets` table | ⬜ Not done |
-| 10.4 | Azure Entra ID sync — alternative/supplementary employee source | ⬜ Not done |
-| 10.5 | CI/CD pipeline — GitHub Actions for lint, test, build, deploy | ⬜ Not done |
-| 10.6 | Docker containerization for self-hosted deployment | ⬜ Not done |
+| 10.1 | Tickets page — surface `tickets` table in UI with list/detail views | ✅ Superseded — IT Response Agent (Phase 11) |
+| 10.2 | Tickets API — CRUD endpoints for ticket data | ✅ Superseded — IT Response Agent (Phase 11) |
+| 10.3 | Ticket sync — wire NinjaOne `getTickets` to populate `tickets` table | ✅ Superseded — IT Response Agent (Phase 11) |
+| 10.4 | Azure Entra ID sync — alternative/supplementary employee source | ❌ Dropped — onboarding workbook sync is the employee source |
+| 10.5 | CI/CD pipeline — GitHub Actions for lint, test, build, deploy | ✅ Shipped — Phase 20 (`deploy-azure.yml`) |
+| 10.6 | Docker containerization for self-hosted deployment | ❌ Dropped — Azure App Service deployment (Phase 20) |
 
 ### Phase 11: IT Response Agent Integration
 > **Status: ✅ Complete** — see [11-it-response-agent.md](./11-it-response-agent.md)
@@ -494,7 +494,7 @@ employee-management/
 | 7 | Code Cleanup & Dependency Hygiene | 5 | 5 | 0 | ✅ Shipped |
 | 8 | Testing | 6 | 6 | 0 | ✅ Shipped |
 | 9 | Authentication & Authorization | 5 | 5 | 0 | ✅ Shipped |
-| 10 | Deferred Features | 6 | 0 | 6 | ⬜ Future |
+| 10 | Deferred Features | 6 | 6 | 0 | ✅ Closed (shipped elsewhere or dropped) |
 | 11 | IT Response Agent Integration | — | — | 0 | ✅ Shipped |
 
 ### v2 (Equipment + Network Inventory)
@@ -522,8 +522,7 @@ employee-management/
 
 ## Next Steps
 
-v2 is shipped and live at <https://app-ems-bp-prod.azurewebsites.net>. Remaining known work:
+v2 is shipped and live at <https://app-ems-bp-prod.azurewebsites.net>, and Phase 10 was closed in the post-v2 triage (everything shipped elsewhere or was dropped — see [10-deferred-features.md](./10-deferred-features.md)). Remaining known work:
 
-1. Phase 10 (Deferred Features — tickets UI, Entra ID sync) stays parked until there's demand.
-2. Upgrade developer workstations to Node ≥ 20.19 (or 22) so `npm test` runs locally; CI (Node 22) is the current source of truth for the suite.
-3. Consider a custom domain (e.g. `ems.bennett-pless.com`) in front of the App Service when DNS access is available.
+1. Upgrade developer workstations to Node ≥ 20.19 (or 22) so `npm test` runs locally; CI (Node 22) is the current source of truth for the suite.
+2. Consider a custom domain (e.g. `ems.bennett-pless.com`) in front of the App Service when DNS access is available.
