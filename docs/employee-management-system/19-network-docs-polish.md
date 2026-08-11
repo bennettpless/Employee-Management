@@ -38,7 +38,7 @@ Final phase of the v2 build. Update top-level documentation (`SETUP_GUIDE.md`, `
   - Card grid is Employees / Devices / Network / IT Response Agent / Settings — no Software or License cards remain
 
 ### Tests
-- [x] `tests/lib/network-import.test.ts` (23 tests):
+- [x] `tests/lib/network-import.test.ts` (19 tests):
   - Parsing: CSV (quoted commas, escaped quotes, CRLF, BOM strip, whitespace trim, empty-row skip, unsupported extension), XLSX via an in-memory `exceljs` workbook fixture
   - Validation: required fields, invalid `device_type`, invalid `status` (+ blank → `'unknown'` default), unknown `office_name`, case-insensitive office matching
   - Column mapping: `autoMapHeaders` aliases (`Device Name` → `name`, `Site` → `office_name`, `IP Address` → `management_ip`, …), arbitrary-header `columnMap` application, enum lowercasing, blank-optional-to-null, `defaultSource`
