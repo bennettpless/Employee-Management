@@ -43,7 +43,7 @@ export async function DELETE(
     
     const { error: unassignError } = await supabase
       .from('devices')
-      .update({ employee_id: null })
+      .update({ employee_id: null, status: 'in_stock' })
       .eq('id', params.deviceId)
     
     if (unassignError) throw unassignError

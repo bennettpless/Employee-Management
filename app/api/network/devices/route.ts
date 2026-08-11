@@ -26,12 +26,11 @@ const DEVICE_FIELDS = [
   'credentials_vault_ref',
   'notes',
   'source',
-  'is_manually_overridden',
 ] as const
 
 type DeviceField = (typeof DEVICE_FIELDS)[number]
 
-const VALID_SOURCES: readonly NetworkDeviceSource[] = ['manual', 'auvik', 'csv']
+const VALID_SOURCES: readonly NetworkDeviceSource[] = ['manual', 'csv']
 
 function sanitizeDeviceBody(body: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
@@ -39,11 +38,6 @@ function sanitizeDeviceBody(body: Record<string, unknown>) {
   for (const field of DEVICE_FIELDS) {
     if (!(field in body)) continue
     const raw = body[field as DeviceField]
-
-    if (field === 'is_manually_overridden') {
-      out[field] = Boolean(raw)
-      continue
-    }
 
     if (typeof raw === 'string') {
       const trimmed = raw.trim()
@@ -175,7 +169,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       if (error.code === '23505') {
         return NextResponse.json(
-          { error: 'A network device with that Auvik ID already exists' },
+          { error: 'A network device with those unique identifiers already exists' },
           { status: 409 }
         )
       }

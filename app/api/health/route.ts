@@ -70,13 +70,48 @@ async function checkNinjaOne(): Promise<ServiceStatus> {
   }
 }
 
+async function checkAzure(): Promise<ServiceStatus> {
+  const start = Date.now()
+  try {
+    if (!process.env.AZURE_CLIENT_ID || !process.env.AZURE_CLIENT_SECRET || !process.env.AZURE_TENANT_ID) {
+      return { name: 'Azure', status: 'error', error: 'Missing AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, or AZURE_TENANT_ID' }
+    }
+    const response = await fetch(
+      `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: process.env.AZURE_CLIENT_ID,
+          client_secret: process.env.AZURE_CLIENT_SECRET,
+          scope: 'https://graph.microsoft.com/.default',
+        }),
+        cache: 'no-store',
+      }
+    )
+    if (!response.ok) {
+      throw new Error(`Token request failed: ${response.status} ${response.statusText}`)
+    }
+    return { name: 'Azure', status: 'connected', latencyMs: Date.now() - start }
+  } catch (err) {
+    return {
+      name: 'Azure',
+      status: 'error',
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
 export async function GET() {
-  const [supabase, ninjaOne] = await Promise.all([
+  const [supabase, ninjaOne, azure] = await Promise.all([
     checkSupabase(),
     checkNinjaOne(),
+    checkAzure(),
   ])
 
-  const services = [supabase, ninjaOne]
+  const services = [supabase, ninjaOne, azure]
   const allHealthy = services.every((s) => s.status === 'connected')
 
   return NextResponse.json(

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Script from 'next/script'
-import { Users, Server, Network, Settings, RefreshCw, Bot } from 'lucide-react'
+import { Server, Network, Settings, Bot, Users } from 'lucide-react'
 
 export default function Home() {
   const agentUrl = process.env.IT_RESPONSE_AGENT_URL?.replace(/\/$/, '')
@@ -32,7 +32,7 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-gray-900 ml-4">Employees</h2>
               </div>
               <p className="text-gray-600">
-                View and manage all employees. Filter by department, office, and employment status.
+                Active employees from onboarding sync. New hires appear here automatically; edit to fix typos.
               </p>
             </div>
           </Link>
@@ -46,7 +46,7 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-gray-900 ml-4">Devices</h2>
               </div>
               <p className="text-gray-600">
-                Track all devices synced from NinjaOne and Intune, hardware specs, and current assignment to employees.
+                Inventory of monitors, laptops, desktops, and TVs — who has what device, its status, warranty, and repair history.
               </p>
             </div>
           </Link>
@@ -61,20 +61,6 @@ export default function Home() {
               </div>
               <p className="text-gray-600">
                 Geographic map of all 11 offices and per-office topology of switches, access points, firewalls, and servers.
-              </p>
-            </div>
-          </Link>
-
-          <Link href="/sync" className="group">
-            <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-cyan-500">
-              <div className="flex items-center mb-4">
-                <div className="bg-cyan-100 rounded-lg p-3 group-hover:bg-cyan-500 transition-colors duration-300">
-                  <RefreshCw className="w-8 h-8 text-cyan-600 group-hover:text-white" />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 ml-4">Sync Status</h2>
-              </div>
-              <p className="text-gray-600">
-                Monitor data synchronization from NinjaOne. Trigger manual sync or view sync history.
               </p>
             </div>
           </Link>
@@ -134,8 +120,8 @@ export default function Home() {
                 <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
               </div>
               <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Direct Employee Management</h4>
-                <p className="text-gray-600 text-sm">Add, edit, and manage employees directly in the application</p>
+                <h4 className="font-semibold text-gray-900 mb-1">Onboarding / Offboarding Sync</h4>
+                <p className="text-gray-600 text-sm">One click pulls new hires and terminations from the SharePoint onboarding workbook</p>
               </div>
             </div>
             <div className="flex items-start">
@@ -143,8 +129,8 @@ export default function Home() {
                 <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
               </div>
               <div>
-                <h4 className="font-semibold text-gray-900 mb-1">NinjaOne Device Tracking</h4>
-                <p className="text-gray-600 text-sm">Hardware specs, OS, and current owner pulled from NinjaOne and Intune</p>
+                <h4 className="font-semibold text-gray-900 mb-1">Device Inventory</h4>
+                <p className="text-gray-600 text-sm">Asset tags, serials, warranties, assignments, and repair/upgrade history per device</p>
               </div>
             </div>
             <div className="flex items-start">
@@ -153,7 +139,7 @@ export default function Home() {
               </div>
               <div>
                 <h4 className="font-semibold text-gray-900 mb-1">Advanced Filtering</h4>
-                <p className="text-gray-600 text-sm">Filter employees by department, office location, and employment status</p>
+                <p className="text-gray-600 text-sm">Filter devices by type, status, department, and location</p>
               </div>
             </div>
             <div className="flex items-start">

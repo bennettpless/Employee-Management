@@ -3,7 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Users, Server, Network, RefreshCw, Settings, LogOut, Menu, X, Bot } from 'lucide-react'
+import { Server, Network, Settings, LogOut, Menu, X, Bot, ScrollText, Users } from 'lucide-react'
 import { useState } from 'react'
 
 const navItems = [
@@ -11,7 +11,7 @@ const navItems = [
   { href: '/employees', label: 'Employees', icon: Users },
   { href: '/devices', label: 'Devices', icon: Server },
   { href: '/network', label: 'Network', icon: Network },
-  { href: '/sync', label: 'Sync', icon: RefreshCw },
+  { href: '/audit', label: 'Audit', icon: ScrollText },
   { href: '/response-agent', label: 'Response Agent', icon: Bot },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]

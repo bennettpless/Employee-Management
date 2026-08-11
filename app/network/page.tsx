@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { useSession } from 'next-auth/react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import {
@@ -9,13 +8,14 @@ import {
   Network as NetworkIcon,
   Upload,
   Download,
-  RefreshCw,
   Building2,
   Loader2,
   MapPin,
   HardDrive,
   AlertCircle,
+  Share2,
 } from 'lucide-react'
+import { isTempTopologyEnabled } from '@/lib/temp-topology/flag'
 import {
   DeviceTypeIcon,
   DEVICE_TYPE_LABEL,
@@ -24,7 +24,6 @@ import {
 import { aggregateOfficeStats } from '@/lib/network-stats'
 import type {
   NetworkDevice,
-  NetworkDeviceStatus,
   NetworkDeviceType,
   Office,
 } from '@/lib/types'
@@ -38,18 +37,51 @@ const OfficeMap = dynamic(() => import('@/components/network/OfficeMap'), {
   ),
 })
 
-export default function NetworkDashboardPage() {
-  const { data: session } = useSession()
-  const role = (session?.user as { role?: string } | undefined)?.role
-  const isAdmin = role === 'admin'
+/**
+ * Kick off a CSV download from the export API. Respects the server-supplied
+ * Content-Disposition filename when present, and falls back to the caller's
+ * suggestion otherwise.
+ */
+async function downloadCsvExport(url: string, fallbackFilename: string) {
+  const res = await fetch(url)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Export failed' }))
+    throw new Error(err.error || `Export failed (${res.status})`)
+  }
+  const blob = await res.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  const cd = res.headers.get('Content-Disposition') || ''
+  const match = /filename\s*=\s*"?([^";]+)"?/i.exec(cd)
+  link.download = match?.[1] ?? fallbackFilename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(objectUrl)
+}
 
+export default function NetworkDashboardPage() {
   const [offices, setOffices] = useState<Office[]>([])
   const [devices, setDevices] = useState<NetworkDevice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [auvikConfigured, setAuvikConfigured] = useState<boolean | null>(null)
-  const [auvikSyncing, setAuvikSyncing] = useState(false)
-  const [auvikMessage, setAuvikMessage] = useState<string | null>(null)
+  const [csvExporting, setCsvExporting] = useState(false)
+
+  const handleCsvExport = async () => {
+    if (csvExporting) return
+    setCsvExporting(true)
+    try {
+      await downloadCsvExport(
+        '/api/network/devices/export?format=csv',
+        'network-devices-all-offices.csv'
+      )
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'CSV export failed')
+    } finally {
+      setCsvExporting(false)
+    }
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -79,55 +111,6 @@ export default function NetworkDashboardPage() {
     load()
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    const checkAuvik = async () => {
-      try {
-        const res = await fetch('/api/network/sync/auvik', { cache: 'no-store' })
-        if (!res.ok) {
-          if (!cancelled) setAuvikConfigured(false)
-          return
-        }
-        const data = await res.json()
-        if (!cancelled) setAuvikConfigured(Boolean(data.configured))
-      } catch {
-        if (!cancelled) setAuvikConfigured(false)
-      }
-    }
-    checkAuvik()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const handleAuvikSync = async () => {
-    if (auvikSyncing) return
-    setAuvikSyncing(true)
-    setAuvikMessage(null)
-    try {
-      const res = await fetch('/api/network/sync/auvik', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || 'Auvik sync failed')
-      }
-      setAuvikMessage(
-        `Sync complete: ${data.devicesUpserted ?? 0} devices, ${data.connectionsUpserted ?? 0} connections in ${data.duration ?? 0}s.`
-      )
-      const [officesRes, devicesRes] = await Promise.all([
-        fetch('/api/network/offices'),
-        fetch('/api/network/devices'),
-      ])
-      const officesData = await officesRes.json()
-      const devicesData = await devicesRes.json()
-      if (officesRes.ok) setOffices(officesData.offices ?? [])
-      if (devicesRes.ok) setDevices(devicesData.devices ?? [])
-    } catch (err) {
-      setAuvikMessage(err instanceof Error ? err.message : 'Auvik sync failed')
-    } finally {
-      setAuvikSyncing(false)
-    }
-  }
-
   const stats = useMemo(() => {
     const byType: Record<NetworkDeviceType, number> = {
       access_point: 0,
@@ -137,18 +120,10 @@ export default function NetworkDashboardPage() {
       router: 0,
       other: 0,
     }
-    const byStatus: Record<NetworkDeviceStatus, number> = {
-      online: 0,
-      offline: 0,
-      warning: 0,
-      critical: 0,
-      unknown: 0,
-    }
     for (const d of devices) {
       byType[d.device_type] = (byType[d.device_type] ?? 0) + 1
-      byStatus[d.status] = (byStatus[d.status] ?? 0) + 1
     }
-    return { total: devices.length, byType, byStatus }
+    return { total: devices.length, byType }
   }, [devices])
 
   const officesWithStats = useMemo(
@@ -189,6 +164,16 @@ export default function NetworkDashboardPage() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {isTempTopologyEnabled() && (
+                <Link
+                  href="/network/inter-office"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 transition-colors text-sm"
+                  title="Draw and export the office-to-office topology map"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Inter-office map
+                </Link>
+              )}
               <Link
                 href="/network/import"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
@@ -197,37 +182,19 @@ export default function NetworkDashboardPage() {
                 Import devices
               </Link>
               <button
-                disabled
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-500 rounded-lg text-sm cursor-not-allowed"
-                title="Available in Phase 18"
+                type="button"
+                onClick={handleCsvExport}
+                disabled={csvExporting}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-sm"
+                title="Download every office's devices as a single CSV"
               >
-                <Download className="w-4 h-4" />
-                Export all
+                {csvExporting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                Export CSV
               </button>
-              {isAdmin && auvikConfigured && (
-                <button
-                  onClick={handleAuvikSync}
-                  disabled={auvikSyncing}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors text-sm"
-                >
-                  {auvikSyncing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
-                  {auvikSyncing ? 'Syncing Auvik...' : 'Sync Auvik'}
-                </button>
-              )}
-              {isAdmin && auvikConfigured === false && (
-                <button
-                  disabled
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-500 rounded-lg text-sm cursor-not-allowed"
-                  title="Set AUVIK_API_USER, AUVIK_API_KEY, and AUVIK_TENANT_DOMAIN to enable Auvik sync"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Sync Auvik
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -239,12 +206,6 @@ export default function NetworkDashboardPage() {
           </div>
         )}
 
-        {auvikMessage && (
-          <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-800">
-            {auvikMessage}
-          </div>
-        )}
-
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
@@ -252,7 +213,7 @@ export default function NetworkDashboardPage() {
         ) : (
           <>
             {/* Aggregate stats */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <div className="mb-8">
               <div className="bg-white rounded-xl shadow-md p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -262,7 +223,7 @@ export default function NetworkDashboardPage() {
                     {stats.total}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                   {(Object.keys(stats.byType) as NetworkDeviceType[]).map(
                     (t) => (
                       <div
@@ -284,33 +245,6 @@ export default function NetworkDashboardPage() {
                   )}
                 </div>
               </div>
-
-              <div className="bg-white rounded-xl shadow-md p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Devices by Status
-                  </h2>
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                  {(
-                    Object.keys(stats.byStatus) as NetworkDeviceStatus[]
-                  ).map((s) => (
-                    <div
-                      key={s}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                    >
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium border capitalize ${STATUS_BADGE_CLASS[s]}`}
-                      >
-                        {s}
-                      </span>
-                      <div className="font-semibold text-gray-900">
-                        {stats.byStatus[s]}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Geographic map */}
@@ -320,8 +254,8 @@ export default function NetworkDashboardPage() {
                 Geographic Map
               </h2>
               <p className="text-gray-600 text-sm">
-                Pins are coloured by the worst-status device in each office.
-                Click a pin for details.
+                Pins are coloured by each office&apos;s status (set in Office
+                Management). Click a pin for details.
               </p>
             </div>
             <div className="mb-8">
@@ -394,14 +328,12 @@ export default function NetworkDashboardPage() {
                           {office.name}
                         </h3>
                       </div>
-                      {office.deviceCount > 0 && (
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium border capitalize ${STATUS_BADGE_CLASS[office.worstStatus]}`}
-                          title={`Worst-status device in this office: ${office.worstStatus}`}
-                        >
-                          {office.worstStatus}
-                        </span>
-                      )}
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium border capitalize ${STATUS_BADGE_CLASS[office.worstStatus]}`}
+                        title="Office status (set manually in Office Management)"
+                      >
+                        {office.worstStatus}
+                      </span>
                     </div>
                     <p className="text-sm text-gray-600 mb-3 line-clamp-1">
                       {[office.city, office.state].filter(Boolean).join(', ') ||

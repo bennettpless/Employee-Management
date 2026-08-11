@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
+import { currentActor, logAudit } from '@/lib/audit'
+import { closeCurrentAssignments } from '@/lib/devices'
 
 export async function GET(
   request: NextRequest,
@@ -123,8 +125,7 @@ export async function PUT(
     const updateData: Record<string, any> = {}
     const allowedFields = [
       'email', 'first_name', 'last_name', 'display_name', 'job_title', 'department',
-      'office_location', 'phone_number', 'extension', 'branch_name', 'type',
-      'supervisor', 'dpt_manager', 'nick_name', 'username'
+      'office_location', 'phone_number', 'extension', 'username',
     ]
     
     for (const field of allowedFields) {
@@ -161,7 +162,28 @@ export async function PUT(
     if (!updatedEmployee) {
       throw new Error('Employee not found after update')
     }
-    
+
+    const changes: Record<string, { from: unknown; to: unknown }> = {}
+    for (const [field, value] of Object.entries(updateData)) {
+      if ((currentEmployee as any)[field] !== value) {
+        changes[field] = {
+          from: (currentEmployee as any)[field] ?? null,
+          to: value,
+        }
+      }
+    }
+    if (Object.keys(changes).length > 0) {
+      await logAudit({
+        actor: await currentActor(),
+        action: 'employee.update',
+        entity_type: 'employee',
+        entity_id: updatedEmployee.id,
+        entity_label:
+          updatedEmployee.display_name || updatedEmployee.email,
+        details: { changes },
+      })
+    }
+
     return NextResponse.json({ 
       success: true,
       employee: updatedEmployee 
@@ -170,6 +192,77 @@ export async function PUT(
     console.error('Error updating employee:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to update employee' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = getServiceSupabase()
+
+    const { data: employee, error: fetchError } = await supabase
+      .from('employees')
+      .select('id, email, display_name')
+      .eq('id', params.id)
+      .single()
+
+    if (fetchError || !employee) {
+      return NextResponse.json(
+        { error: 'Employee not found' },
+        { status: 404 }
+      )
+    }
+
+    const { data: employeeDevices, error: devicesError } = await supabase
+      .from('devices')
+      .select('id')
+      .eq('employee_id', params.id)
+
+    if (!devicesError && employeeDevices && employeeDevices.length > 0) {
+      const now = new Date().toISOString()
+      for (const d of employeeDevices) {
+        await closeCurrentAssignments(supabase, d.id, now)
+      }
+
+      const { error: unassignError } = await supabase
+        .from('devices')
+        .update({ employee_id: null, status: 'in_stock' })
+        .in(
+          'id',
+          employeeDevices.map((d) => d.id)
+        )
+
+      if (unassignError) throw unassignError
+    }
+
+    const { error: deleteError } = await supabase
+      .from('employees')
+      .delete()
+      .eq('id', params.id)
+
+    if (deleteError) throw deleteError
+
+    await logAudit({
+      actor: await currentActor(),
+      action: 'employee.delete',
+      entity_type: 'employee',
+      entity_id: employee.id,
+      entity_label: employee.display_name || employee.email,
+      details: {
+        email: employee.email,
+        devices_unassigned: employeeDevices?.length ?? 0,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error('Error deleting employee:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete employee' },
       { status: 500 }
     )
   }

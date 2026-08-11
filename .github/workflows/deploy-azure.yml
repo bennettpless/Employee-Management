@@ -1,0 +1,74 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+env:
+  APP_URL: https://app-ems-bp-prod.azurewebsites.net
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # NEXT_PUBLIC_* values are inlined into the client bundle at build time.
+          # Server-only vars are needed too because some routes/pages are
+          # prerendered during the build and validated by lib/env.ts.
+          NEXT_PUBLIC_APP_URL: ${{ env.APP_URL }}
+          NEXTAUTH_URL: ${{ env.APP_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          SHAREPOINT_SITE_PATH: ${{ secrets.SHAREPOINT_SITE_PATH }}
+          SHAREPOINT_FILE_PATH: ${{ secrets.SHAREPOINT_FILE_PATH }}
+          NINJA_CLIENT_ID: ${{ secrets.NINJA_CLIENT_ID }}
+          NINJA_CLIENT_SECRET: ${{ secrets.NINJA_CLIENT_SECRET }}
+          NINJA_REGION: ${{ secrets.NINJA_REGION }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          IT_RESPONSE_AGENT_URL: ${{ secrets.IT_RESPONSE_AGENT_URL }}
+          IT_RESPONSE_AGENT_API_KEY: ${{ secrets.IT_RESPONSE_AGENT_API_KEY }}
+          DEVICE_INVENTORY_WORKBOOK: ${{ secrets.DEVICE_INVENTORY_WORKBOOK }}
+          ONBOARDING_WORKBOOK: ${{ secrets.ONBOARDING_WORKBOOK }}
+
+      - name: Assemble standalone bundle
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: app-ems-bp-prod
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
+          package: .next/standalone
+
+      - name: Smoke test
+        run: |
+          sleep 30
+          status=$(curl -s -o /dev/null -w "%{http_code}" -L ${{ env.APP_URL }}/login)
+          echo "GET /login -> $status"
+          test "$status" = "200"

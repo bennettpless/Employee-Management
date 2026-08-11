@@ -1,10 +1,18 @@
 import { withAuth } from 'next-auth/middleware'
+import { NextResponse } from 'next/server'
+import { DEV_AUTH_DISABLED } from '@/lib/dev-auth'
 
-export default withAuth({
-  pages: {
-    signIn: '/login',
-  },
-})
+// ⚠️ TEMPORARY: when the dev auth bypass is on, let every request through
+// untouched. Hard-gated to non-production in `lib/dev-auth.ts`.
+export default DEV_AUTH_DISABLED
+  ? function middleware() {
+      return NextResponse.next()
+    }
+  : withAuth({
+      pages: {
+        signIn: '/login',
+      },
+    })
 
 export const config = {
   matcher: [

@@ -12,8 +12,8 @@ const OFFICE_FIELDS = [
   'country',
   'latitude',
   'longitude',
-  'auvik_network_id',
   'notes',
+  'status',
 ] as const
 
 type OfficeField = typeof OFFICE_FIELDS[number]
@@ -31,6 +31,11 @@ function sanitizeOfficeBody(body: Record<string, unknown>) {
         const n = Number(raw)
         out[field] = Number.isFinite(n) ? n : null
       }
+      continue
+    }
+
+    if (field === 'status') {
+      out[field] = raw === 'offline' ? 'offline' : 'online'
       continue
     }
 

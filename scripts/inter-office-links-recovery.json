@@ -1,0 +1,47 @@
+{
+  "_meta": {
+    "description": "Backup of inter-office topology (positions + links) recovered from browser localStorage key 'temp-topology:inter-office:v1' on 2026-07-27. Used to seed the new office_connections table + office layout columns.",
+    "recovered_at": "2026-07-27",
+    "source": "Cursor embedded browser localStorage"
+  },
+  "version": 1,
+  "positions": {
+    "6f5947a9-5a91-4839-be96-48f8772ece2b": { "x": 1151, "y": 544 },
+    "5ed8be5c-5cc4-484b-8747-9ec68621d962": { "x": 1724, "y": 531 },
+    "f928ec33-1401-4a8a-aa1f-da8ef165b958": { "x": 1170, "y": 109 },
+    "a20213cc-daf4-4271-8d97-996151c8a9d4": { "x": 504, "y": 397 },
+    "056ab012-625a-4f01-9601-16b6fbe496fe": { "x": 1647, "y": 177 },
+    "645e3913-9f0a-4326-a9fe-918b93cf4834": { "x": 1691, "y": 809 },
+    "2ef6b1d1-6dbe-4387-87c4-bda9eafa0aea": { "x": 508, "y": 622 },
+    "509b854e-48eb-45ad-8d1e-8e18cc05a7c2": { "x": 688, "y": 159 },
+    "71afc027-9929-4c84-bd1f-2071b0089cd4": { "x": 887, "y": 994 },
+    "ed016174-f26e-49fe-8101-44ddda2f91b0": { "x": 1289, "y": 993 },
+    "4de9cfc5-9e22-4367-8493-a468db0920e0": { "x": 601, "y": 841 }
+  },
+  "links": [
+    { "id": "link-509b854e-48eb-45ad-8d1e-8e18cc05a7c2-5ed8be5c-5cc4-484b-8747-9ec68621d962-1782147719389", "source": "509b854e-48eb-45ad-8d1e-8e18cc05a7c2", "target": "5ed8be5c-5cc4-484b-8747-9ec68621d962", "linkType": "IPSec VPN", "sourceHandle": "r", "targetHandle": "l" },
+    { "id": "link-056ab012-625a-4f01-9601-16b6fbe496fe-509b854e-48eb-45ad-8d1e-8e18cc05a7c2-1782149735028", "source": "056ab012-625a-4f01-9601-16b6fbe496fe", "target": "509b854e-48eb-45ad-8d1e-8e18cc05a7c2", "linkType": "IPSec VPN", "sourceHandle": "t", "targetHandle": "t", "curveOffset": 166 },
+    { "id": "link-056ab012-625a-4f01-9601-16b6fbe496fe-f928ec33-1401-4a8a-aa1f-da8ef165b958-1782150630561", "source": "056ab012-625a-4f01-9601-16b6fbe496fe", "target": "f928ec33-1401-4a8a-aa1f-da8ef165b958", "linkType": "IPSec VPN", "sourceHandle": "t", "targetHandle": "t", "curveOffset": 44 },
+    { "id": "link-509b854e-48eb-45ad-8d1e-8e18cc05a7c2-a20213cc-daf4-4271-8d97-996151c8a9d4-1782150651653", "source": "509b854e-48eb-45ad-8d1e-8e18cc05a7c2", "target": "a20213cc-daf4-4271-8d97-996151c8a9d4", "linkType": "IPSec VPN", "sourceHandle": "l", "targetHandle": "l", "curveOffset": 88 },
+    { "id": "link-645e3913-9f0a-4326-a9fe-918b93cf4834-056ab012-625a-4f01-9601-16b6fbe496fe-1782150721735", "source": "645e3913-9f0a-4326-a9fe-918b93cf4834", "target": "056ab012-625a-4f01-9601-16b6fbe496fe", "linkType": "IPSec VPN", "sourceHandle": "r", "targetHandle": "r", "curveOffset": 205 },
+    { "id": "link-645e3913-9f0a-4326-a9fe-918b93cf4834-ed016174-f26e-49fe-8101-44ddda2f91b0-1782150786901", "source": "645e3913-9f0a-4326-a9fe-918b93cf4834", "target": "ed016174-f26e-49fe-8101-44ddda2f91b0", "linkType": "IPSec VPN", "sourceHandle": "b", "targetHandle": "b", "curveOffset": -153 },
+    { "id": "link-ed016174-f26e-49fe-8101-44ddda2f91b0-056ab012-625a-4f01-9601-16b6fbe496fe-1782150826047", "source": "ed016174-f26e-49fe-8101-44ddda2f91b0", "target": "056ab012-625a-4f01-9601-16b6fbe496fe", "linkType": "IPSec VPN", "sourceHandle": "t", "targetHandle": "b" },
+    { "id": "link-f928ec33-1401-4a8a-aa1f-da8ef165b958-509b854e-48eb-45ad-8d1e-8e18cc05a7c2-1782150844085", "source": "f928ec33-1401-4a8a-aa1f-da8ef165b958", "target": "509b854e-48eb-45ad-8d1e-8e18cc05a7c2", "linkType": "IPSec VPN", "sourceHandle": "t", "targetHandle": "t", "curveOffset": 46 },
+    { "id": "link-f928ec33-1401-4a8a-aa1f-da8ef165b958-5ed8be5c-5cc4-484b-8747-9ec68621d962-1782150861241", "source": "f928ec33-1401-4a8a-aa1f-da8ef165b958", "target": "5ed8be5c-5cc4-484b-8747-9ec68621d962", "linkType": "IPSec VPN", "sourceHandle": "r", "targetHandle": "t", "curveOffset": -62 },
+    { "id": "link-5ed8be5c-5cc4-484b-8747-9ec68621d962-056ab012-625a-4f01-9601-16b6fbe496fe-1782150909049", "source": "5ed8be5c-5cc4-484b-8747-9ec68621d962", "target": "056ab012-625a-4f01-9601-16b6fbe496fe", "linkType": "IPSec VPN", "sourceHandle": "r", "targetHandle": "r", "curveOffset": 47 },
+    { "id": "link-ed016174-f26e-49fe-8101-44ddda2f91b0-5ed8be5c-5cc4-484b-8747-9ec68621d962-1782151230858", "source": "ed016174-f26e-49fe-8101-44ddda2f91b0", "target": "5ed8be5c-5cc4-484b-8747-9ec68621d962", "linkType": "IPSec VPN", "sourceHandle": "r", "targetHandle": "b" },
+    { "id": "link-ed016174-f26e-49fe-8101-44ddda2f91b0-71afc027-9929-4c84-bd1f-2071b0089cd4-1782151546964", "source": "ed016174-f26e-49fe-8101-44ddda2f91b0", "target": "71afc027-9929-4c84-bd1f-2071b0089cd4", "linkType": "IPSec VPN", "sourceHandle": "b", "targetHandle": "b", "curveOffset": -69 },
+    { "id": "link-ed016174-f26e-49fe-8101-44ddda2f91b0-f928ec33-1401-4a8a-aa1f-da8ef165b958-1782151563948", "source": "ed016174-f26e-49fe-8101-44ddda2f91b0", "target": "f928ec33-1401-4a8a-aa1f-da8ef165b958", "linkType": "IPSec VPN", "sourceHandle": "l", "targetHandle": "l", "curveOffset": -193 },
+    { "id": "link-ed016174-f26e-49fe-8101-44ddda2f91b0-509b854e-48eb-45ad-8d1e-8e18cc05a7c2-1782151685948", "source": "ed016174-f26e-49fe-8101-44ddda2f91b0", "target": "509b854e-48eb-45ad-8d1e-8e18cc05a7c2", "linkType": "IPSec VPN", "sourceHandle": "l", "targetHandle": "b", "curveOffset": -140 },
+    { "id": "link-a20213cc-daf4-4271-8d97-996151c8a9d4-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168569205", "source": "a20213cc-daf4-4271-8d97-996151c8a9d4", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "r", "targetHandle": "l" },
+    { "id": "link-2ef6b1d1-6dbe-4387-87c4-bda9eafa0aea-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168571445", "source": "2ef6b1d1-6dbe-4387-87c4-bda9eafa0aea", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "r", "targetHandle": "l" },
+    { "id": "link-4de9cfc5-9e22-4367-8493-a468db0920e0-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168573929", "source": "4de9cfc5-9e22-4367-8493-a468db0920e0", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "r", "targetHandle": "b" },
+    { "id": "link-71afc027-9929-4c84-bd1f-2071b0089cd4-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168576469", "source": "71afc027-9929-4c84-bd1f-2071b0089cd4", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "t", "targetHandle": "b" },
+    { "id": "link-ed016174-f26e-49fe-8101-44ddda2f91b0-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168579053", "source": "ed016174-f26e-49fe-8101-44ddda2f91b0", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "t", "targetHandle": "b" },
+    { "id": "link-645e3913-9f0a-4326-a9fe-918b93cf4834-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168583027", "source": "645e3913-9f0a-4326-a9fe-918b93cf4834", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "t", "targetHandle": "r" },
+    { "id": "link-5ed8be5c-5cc4-484b-8747-9ec68621d962-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168589125", "source": "5ed8be5c-5cc4-484b-8747-9ec68621d962", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "l", "targetHandle": "r" },
+    { "id": "link-056ab012-625a-4f01-9601-16b6fbe496fe-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168592445", "source": "056ab012-625a-4f01-9601-16b6fbe496fe", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "l", "targetHandle": "t" },
+    { "id": "link-f928ec33-1401-4a8a-aa1f-da8ef165b958-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168594281", "source": "f928ec33-1401-4a8a-aa1f-da8ef165b958", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "b", "targetHandle": "t" },
+    { "id": "link-509b854e-48eb-45ad-8d1e-8e18cc05a7c2-6f5947a9-5a91-4839-be96-48f8772ece2b-1785168599427", "source": "509b854e-48eb-45ad-8d1e-8e18cc05a7c2", "target": "6f5947a9-5a91-4839-be96-48f8772ece2b", "linkType": "IPSec VPN", "sourceHandle": "b", "targetHandle": "t" }
+  ]
+}

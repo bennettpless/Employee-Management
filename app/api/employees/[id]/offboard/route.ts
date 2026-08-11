@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
+import { closeCurrentAssignments } from '@/lib/devices'
 
 export async function POST(
   request: NextRequest,
@@ -27,21 +28,17 @@ export async function POST(
       .eq('employee_id', params.id)
     
     if (!devicesError && employeeDevices && employeeDevices.length > 0) {
-      await supabase
-        .from('device_assignments_history')
-        .update({
-          is_current: false,
-          unassignment_date: new Date().toISOString()
-        })
-        .eq('employee_id', params.id)
-        .eq('is_current', true)
-      
+      const now = new Date().toISOString()
+      for (const d of employeeDevices) {
+        await closeCurrentAssignments(supabase, d.id, now)
+      }
+
       const deviceIds = employeeDevices.map(d => d.id)
       const { error: unassignError } = await supabase
         .from('devices')
-        .update({ employee_id: null })
+        .update({ employee_id: null, status: 'in_stock' })
         .in('id', deviceIds)
-      
+
       if (unassignError) {
         throw unassignError
       }

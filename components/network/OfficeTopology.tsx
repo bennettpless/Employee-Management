@@ -29,8 +29,6 @@ import { jsPDF } from 'jspdf'
 import {
   Loader2,
   LayoutGrid,
-  Download,
-  FileText,
   RefreshCw,
   Workflow,
   Trash2,
@@ -45,10 +43,32 @@ import type {
   NetworkDeviceConnection,
 } from '@/lib/types'
 
+/**
+ * Bundle of imperative export functions the parent page can invoke from its
+ * ExportMenu. `null` means the topology isn't in a state where an export
+ * would produce a valid image (loading, errored, or no devices yet).
+ */
+export type TopologyExports = {
+  png: () => Promise<void>
+  pdf: () => Promise<void>
+} | null
+
 interface OfficeTopologyProps {
   officeId: string
   officeName: string
   canEdit: boolean
+  /**
+   * Called with the imperative PNG/PDF export functions whenever the topology
+   * transitions between "ready to export" and "not ready" (loading, error,
+   * empty, or after a reload). The parent should stash these and drive its
+   * own ExportMenu items with them.
+   */
+  onExportsReady?: (fns: TopologyExports) => void
+  /**
+   * Called whenever the topology's internal export state changes so the
+   * parent's ExportMenu can show a spinner on the running item.
+   */
+  onExportingChange?: (state: 'png' | 'pdf' | null) => void
 }
 
 interface TopologyApiNode {
@@ -117,6 +137,8 @@ function OfficeTopologyInner({
   officeId,
   officeName,
   canEdit,
+  onExportsReady,
+  onExportingChange,
 }: OfficeTopologyProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -462,6 +484,29 @@ function OfficeTopologyInner({
     }
   }, [safeFilenameBase])
 
+  // Publish the export state upward so the parent's ExportMenu can show a
+  // spinner on whichever item is currently running.
+  useEffect(() => {
+    onExportingChange?.(exporting)
+  }, [exporting, onExportingChange])
+
+  // Publish the export functions to the parent whenever the topology is in
+  // a state where they'd produce a valid image (rendered wrapper + at least
+  // one node). Otherwise publish `null` so the parent can disable those
+  // items. Cleans up on unmount so a stale reference isn't retained.
+  const topologyReady = !loading && !loadError && nodes.length > 0
+  useEffect(() => {
+    if (!onExportsReady) return
+    if (topologyReady) {
+      onExportsReady({ png: exportPng, pdf: exportPdf })
+    } else {
+      onExportsReady(null)
+    }
+    return () => {
+      onExportsReady(null)
+    }
+  }, [topologyReady, exportPng, exportPdf, onExportsReady])
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl shadow-md p-12 flex items-center justify-center">
@@ -534,30 +579,12 @@ function OfficeTopologyInner({
               Auto-layout
             </button>
           )}
-          <button
-            onClick={exportPng}
-            disabled={exporting !== null}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            {exporting === 'png' ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Download className="w-4 h-4" />
-            )}
-            Export PNG
-          </button>
-          <button
-            onClick={exportPdf}
-            disabled={exporting !== null}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            {exporting === 'pdf' ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <FileText className="w-4 h-4" />
-            )}
-            Export PDF
-          </button>
+          {/*
+            PNG/PDF export moved to the page-level Export menu (Phase 18).
+            The topology still owns the underlying export logic and publishes
+            it upward via `onExportsReady` so there's only one export UI on
+            the page.
+          */}
         </div>
       </div>
 

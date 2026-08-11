@@ -12,7 +12,6 @@ import {
   Loader2,
   Edit2,
   MapPin,
-  Download,
   Upload,
 } from 'lucide-react'
 import NetworkDeviceTable from '@/components/network/NetworkDeviceTable'
@@ -22,6 +21,8 @@ import NetworkDeviceForm, {
   formToBody,
   type NetworkDeviceFormState,
 } from '@/components/network/NetworkDeviceForm'
+import ExportMenu, { type ExportMenuItem } from '@/components/network/ExportMenu'
+import type { TopologyExports } from '@/components/network/OfficeTopology'
 import type { NetworkDevice, Office } from '@/lib/types'
 
 // React Flow ships its own CSS and uses `window`/`document` extensively, so
@@ -39,6 +40,90 @@ const OfficeTopology = dynamic(
 
 interface OfficeWithDeviceCount extends Office {
   device_count?: number
+}
+
+/**
+ * Trigger a browser download of a CSV response from the export API. Uses a
+ * blob + object URL so the "attachment" Content-Disposition header the server
+ * sets is honoured even from JS.
+ */
+async function downloadCsv(url: string, fallbackFilename: string) {
+  const res = await fetch(url)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Export failed' }))
+    throw new Error(err.error || `Export failed (${res.status})`)
+  }
+  const blob = await res.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  // Pull the filename out of Content-Disposition if the server provided one;
+  // fall back to the caller's suggestion otherwise.
+  const cd = res.headers.get('Content-Disposition') || ''
+  const match = /filename\s*=\s*"?([^";]+)"?/i.exec(cd)
+  link.download = match?.[1] ?? fallbackFilename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(objectUrl)
+}
+
+/**
+ * Build the three ExportMenu items for the per-office page. PNG/PDF are
+ * disabled with an explanatory tooltip whenever the topology isn't ready
+ * (loading, errored, or the office has no devices yet).
+ */
+function buildOfficeExportItems({
+  officeId,
+  deviceCount,
+  topologyExports,
+  topologyExporting,
+}: {
+  officeId: string
+  deviceCount: number
+  topologyExports: TopologyExports
+  topologyExporting: 'png' | 'pdf' | null
+}): ExportMenuItem[] {
+  const topologyDisabledReason =
+    deviceCount === 0
+      ? 'Add at least one device to export the topology diagram'
+      : !topologyExports
+        ? 'Topology diagram is still loading'
+        : undefined
+
+  return [
+    {
+      format: 'png',
+      onSelect: async () => {
+        if (topologyExports) await topologyExports.png()
+      },
+      disabled: !topologyExports,
+      disabledReason: topologyDisabledReason,
+      running: topologyExporting === 'png',
+    },
+    {
+      format: 'csv',
+      onSelect: async () => {
+        try {
+          await downloadCsv(
+            `/api/network/devices/export?format=csv&officeId=${encodeURIComponent(officeId)}`,
+            `network-devices-office-${officeId}.csv`
+          )
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'CSV export failed')
+        }
+      },
+    },
+    {
+      format: 'pdf',
+      onSelect: async () => {
+        if (topologyExports) await topologyExports.pdf()
+      },
+      disabled: !topologyExports,
+      disabledReason: topologyDisabledReason,
+      running: topologyExporting === 'pdf',
+    },
+  ]
 }
 
 export default function OfficeNetworkPage() {
@@ -61,6 +146,13 @@ export default function OfficeNetworkPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Registered by the topology when it's rendered and ready to export; null
+  // otherwise (loading / errored / empty). Drives PNG/PDF menu items below.
+  const [topologyExports, setTopologyExports] = useState<TopologyExports>(null)
+  const [topologyExporting, setTopologyExporting] = useState<
+    'png' | 'pdf' | null
+  >(null)
 
   const loadAll = useCallback(async () => {
     if (!officeId) return
@@ -272,14 +364,15 @@ export default function OfficeNetworkPage() {
               <Upload className="w-4 h-4" />
               Import
             </Link>
-            <button
-              disabled
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-white border border-gray-300 text-gray-500 rounded-lg cursor-not-allowed"
-              title="Available in Phase 18"
-            >
-              <Download className="w-4 h-4" />
-              Export office
-            </button>
+            <ExportMenu
+              label="Export office"
+              items={buildOfficeExportItems({
+                officeId,
+                deviceCount: devices.length,
+                topologyExports,
+                topologyExporting,
+              })}
+            />
             {isAdmin && (
               <button
                 onClick={openCreate}
@@ -306,6 +399,8 @@ export default function OfficeNetworkPage() {
             officeId={officeId}
             officeName={office.name}
             canEdit={isAdmin}
+            onExportsReady={setTopologyExports}
+            onExportingChange={setTopologyExporting}
           />
         </div>
       </div>

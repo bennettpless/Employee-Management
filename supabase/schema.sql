@@ -90,8 +90,9 @@ CREATE TABLE offices (
     country VARCHAR(100) DEFAULT 'USA',
     latitude DECIMAL(10, 7),
     longitude DECIMAL(10, 7),
-    auvik_network_id VARCHAR(255),
     notes TEXT,
+    layout_x DECIMAL, -- inter-office React Flow node position (NULL = auto-layout)
+    layout_y DECIMAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -99,7 +100,6 @@ CREATE TABLE offices (
 -- Network devices: APs, switches, firewalls, servers, routers (per office)
 CREATE TABLE network_devices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    auvik_device_id VARCHAR(255) UNIQUE,
     office_id UUID REFERENCES offices(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
     device_type VARCHAR(50) NOT NULL CHECK (
@@ -118,8 +118,7 @@ CREATE TABLE network_devices (
     last_seen TIMESTAMP WITH TIME ZONE,
     credentials_vault_ref TEXT, -- LastPass entry name; no actual credentials stored
     notes TEXT,
-    source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('manual', 'auvik', 'csv')),
-    is_manually_overridden BOOLEAN DEFAULT FALSE,
+    source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('manual', 'csv')),
     last_synced_at TIMESTAMP WITH TIME ZONE,
     layout_x DECIMAL, -- per-office React Flow node position (NULL = auto-layout)
     layout_y DECIMAL,
@@ -135,10 +134,27 @@ CREATE TABLE network_device_connections (
     source_port VARCHAR(50),
     target_port VARCHAR(50),
     link_type VARCHAR(50) CHECK (link_type IN ('ethernet', 'fiber', 'wireless', 'other') OR link_type IS NULL),
-    auvik_link_id VARCHAR(255),
     last_synced_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE (source_device_id, target_device_id, source_port, target_port)
+);
+
+-- Office connections: site-to-site topology edges between offices
+-- (SonicWall VPN / Cloud Secure Edge / MPLS links drawn on the inter-office
+-- topology page). Handle + curve columns capture the React Flow visual state
+-- so the diagram renders identically after reload.
+CREATE TABLE office_connections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_office_id UUID NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+    target_office_id UUID NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+    link_type VARCHAR(100) NOT NULL DEFAULT 'IPSec VPN',
+    source_handle VARCHAR(10), -- 't' | 'r' | 'b' | 'l'
+    target_handle VARCHAR(10),
+    curve_offset DECIMAL, -- signed perpendicular bend distance; NULL/0 = straight
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT office_connections_no_self_loop CHECK (source_office_id <> target_office_id)
 );
 
 -- Create indexes for better query performance
@@ -154,9 +170,10 @@ CREATE INDEX idx_tickets_status ON tickets(status);
 CREATE INDEX idx_network_devices_office ON network_devices(office_id);
 CREATE INDEX idx_network_devices_type ON network_devices(device_type);
 CREATE INDEX idx_network_devices_status ON network_devices(status);
-CREATE INDEX idx_network_devices_auvik_id ON network_devices(auvik_device_id);
 CREATE INDEX idx_network_connections_source ON network_device_connections(source_device_id);
 CREATE INDEX idx_network_connections_target ON network_device_connections(target_device_id);
+CREATE INDEX idx_office_connections_source ON office_connections(source_office_id);
+CREATE INDEX idx_office_connections_target ON office_connections(target_office_id);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -180,6 +197,9 @@ CREATE TRIGGER update_offices_updated_at BEFORE UPDATE ON offices
 CREATE TRIGGER update_network_devices_updated_at BEFORE UPDATE ON network_devices
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_office_connections_updated_at BEFORE UPDATE ON office_connections
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Row Level Security (RLS) Policies
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE devices ENABLE ROW LEVEL SECURITY;
@@ -188,6 +208,7 @@ ALTER TABLE sync_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE offices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE network_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE network_device_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE office_connections ENABLE ROW LEVEL SECURITY;
 
 -- Allow authenticated users to read all data (service role bypasses RLS for writes)
 CREATE POLICY "Allow authenticated read access" ON employees FOR SELECT TO authenticated USING (true);
@@ -197,3 +218,4 @@ CREATE POLICY "Allow authenticated read access" ON sync_logs FOR SELECT TO authe
 CREATE POLICY "Allow authenticated read access" ON offices FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read access" ON network_devices FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read access" ON network_device_connections FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow authenticated read access" ON office_connections FOR SELECT TO authenticated USING (true);

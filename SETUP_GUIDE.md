@@ -9,11 +9,10 @@ This guide walks you through every step of setting up the Employee Management Sy
 4. [Microsoft Azure / SharePoint Setup](#microsoft-azure--sharepoint-setup)
 5. [NinjaOne Setup](#ninjaone-setup)
 6. [Application Configuration](#application-configuration)
-7. [Auvik Setup (Optional, Phase 17)](#auvik-setup-optional-phase-17)
-8. [First Data Sync](#first-data-sync)
-9. [Production Deployment](#production-deployment)
-10. [Troubleshooting](#troubleshooting)
-11. [Optional: Azure Entra ID](#optional-azure-entra-id)
+7. [First Data Sync](#first-data-sync)
+8. [Production Deployment](#production-deployment)
+9. [Troubleshooting](#troubleshooting)
+10. [Optional: Azure Entra ID](#optional-azure-entra-id)
 
 ## Prerequisites
 
@@ -87,7 +86,7 @@ If the dev server starts without errors, you're ready to proceed.
 
 ## Microsoft Azure / SharePoint Setup
 
-The app reads the employee and device roster from a **SharePoint-hosted Excel file** ("BP Employee list and inventory.xlsx") using Microsoft Graph. You need an Azure App Registration with permissions to access that file.
+The app reads onboarding / offboarding / device-inventory **SharePoint workbooks** via Microsoft Graph (see `lib/sharepoint-workbook.ts`). You need an Azure App Registration with permissions to access those files.
 
 ### Step 1: Create App Registration
 
@@ -116,13 +115,13 @@ After registration, copy **Application (client) ID** and **Directory (tenant) ID
 
 1. In left sidebar, click **API permissions**
 2. Click **Add a permission** > **Microsoft Graph** > **Application permissions**
-3. Add permissions needed to read the Excel file from SharePoint, for example:
+3. Add permissions needed to read SharePoint workbooks, for example:
    - `Sites.Read.All` (if the file is in a SharePoint site)
    - or `Files.Read.All` (if using OneDrive/SharePoint file access)
 4. Click **Grant admin consent for [your organization]**
 5. Verify all permissions show "Granted"
 
-For exact column mapping and file location, see **SHAREPOINT_SETUP.md** and **EXCEL_MIGRATION_SUMMARY.md** in the project.
+Workbook file names and sheet overrides are configured via env vars — see the Application Configuration section below (`ONBOARDING_WORKBOOK`, `DEVICE_INVENTORY_WORKBOOK`, etc.).
 
 ## NinjaOne Setup
 
@@ -348,53 +347,6 @@ After `npm run dev`:
 - If the iframe is blank or the badge never appears, check the browser console for CORS errors (means `PORTAL_ORIGIN` is wrong on the agent)
 - If you see "IT Response Agent not configured" on `/response-agent`, the env vars aren't set
 
-## Auvik Setup (Optional, Phase 17)
-
-The Auvik integration is **optional**. When it's not configured, the Network tab continues to work via manual entry + CSV/XLSX import (Phase 14). When it is configured, Auvik becomes the primary network data source for `network_devices` and `network_device_connections`, and the sync respects the `is_manually_overridden` flag so hand-edited rows are never clobbered.
-
-### Step 1: Generate an Auvik API key
-
-1. Log in to Auvik at `https://<your-tenant>.my.auvik.com` — the subdomain (the part before `.my.auvik.com`) is your `AUVIK_TENANT_DOMAIN`. For Bennett & Pless, that value is `bennettpless`.
-2. Go to **My Profile → API Keys** (top-right user menu → My Profile → API Keys tab). On some plans this lives under **Discovery → Manage API Access** instead.
-3. Click **Generate API Key**. Auvik will show:
-   - The API user (your email or a service-account email) — this is `AUVIK_API_USER`.
-   - The API key (a long token shown only once — copy it immediately) — this is `AUVIK_API_KEY`.
-4. **Recommended**: create a dedicated read-only API user under **Settings → Users → Add User** with the `Read-Only` role and use that user's API key. This keeps the integration auditable and revocable without affecting personal logins.
-5. If your Auvik plan doesn't expose API key generation, contact Auvik support — the API is included on most paid tiers but may need to be enabled.
-
-### Step 2: Add the env vars
-
-Add these to `.env.local` (and to your production environment):
-
-```bash
-AUVIK_API_USER=api-user@example.com
-AUVIK_API_KEY=...long-token-from-step-1...
-AUVIK_TENANT_DOMAIN=bennettpless
-```
-
-`AUVIK_API_BASE_URL` is an optional override — only set it if Auvik's API for your tenant uses a region-host pattern like `https://auvikapi.us1.my.auvik.com/v1` instead of the default `https://api.{tenant}.my.auvik.com/v1`.
-
-Restart the dev server (or redeploy) after adding the vars.
-
-### Step 3: Map each office to its Auvik network ID
-
-Each Auvik network (≈ one site/office in our model) needs to be linked to an EMS office for the sync to update its devices. In Auvik, open a network and copy its ID from the URL or the network detail page.
-
-In EMS, go to **Settings → Office Management** and edit each office. Paste the Auvik network ID into the **Auvik Network ID** field and save.
-
-Auvik networks that don't match any office's `auvik_network_id` are logged as warnings in the Auvik sync's `sync_logs.error_message` column and skipped — they never block the rest of the sync.
-
-### Step 4: Verify the sync
-
-1. Navigate to **/sync** — you should see a new "Sync from Auvik" card (purple, between NinjaOne and Intune).
-2. Click **Sync from Auvik**. The card will show a per-run summary: networks processed, devices upserted, devices skipped (overridden or unmapped device-type), connections upserted, etc.
-3. Check **/network** — Auvik-sourced devices have `source = 'auvik'` and `last_synced_at` populated. They appear alongside any manual or CSV-imported devices in the per-office tables.
-4. To confirm the manual-override behaviour: edit any device on **/network/offices/[id]**, set "Manually Overridden" to true, run the Auvik sync again, and verify the row's `last_synced_at` did **not** change.
-
-### Cron schedule
-
-When deployed on Vercel, [`vercel.json`](./vercel.json) registers a daily cron at **04:00 UTC** that hits `/api/network/sync/auvik` (alongside the existing 03:00 UTC NinjaOne cron). For other deployments, add a daily cron that POSTs to `/api/network/sync/auvik` with an `Authorization: Bearer ${SYNC_CRON_SECRET}` header — same auth pattern as the NinjaOne cron.
-
 ## First Data Sync
 
 ### Step 1: Start Development Server
@@ -405,32 +357,31 @@ npm run dev
 
 Open http://localhost:3000
 
-### Step 2: Sync from Excel
+### Step 2: Run Onboarding Sync
 
 1. Navigate to the **Sync** page (http://localhost:3000/sync)
-2. Click **Sync from Excel**
-3. Wait for completion (reads "BP Employee list and inventory.xlsx" from SharePoint)
-4. Check for success message and review sync history
+2. Trigger the **Onboarding** sync (reads the configured onboarding / offboarding workbooks from SharePoint)
+3. Wait for completion and review any skipped / error rows
 
 **What this does**:
-- Reads the Excel file from SharePoint via Microsoft Graph
-- Creates or updates employee records in Supabase
-- Creates or updates device records and assigns them to employees
-- NinjaOne sync may run afterward to fill in device details (serial, OS)
+- Reads the onboarding workbook via Microsoft Graph (`lib/sharepoint-workbook.ts`)
+- Creates new employee records (including `username` + `extension` when present)
+- Assigns / creates devices for those employees
+- Looks up new machines in NinjaOne when available
 
 ### Step 3: Verify Employee and Device Roster
 
-1. Go to **Employees** page — you should see employees from the Excel sheet
-2. Open an employee to see their devices from Excel
-3. If data looks good, device details will be filled when NinjaOne sync runs (after Excel sync or on schedule)
+1. Go to **Employees** page — you should see newly onboarded employees
+2. Open an employee to see their assigned devices
+3. Device hardware details are filled when NinjaOne sync runs (manual or scheduled)
 
-**If Excel sync fails**:
+**If onboarding sync fails**:
 - Verify Azure App has SharePoint/OneDrive permissions
-- Check file name and location (see SHAREPOINT_SETUP.md and EXCEL_MIGRATION_SUMMARY.md)
+- Check workbook env vars (`ONBOARDING_WORKBOOK`, `SHAREPOINT_SITE_PATH`, sheet-name overrides)
 
 ### Step 4: NinjaOne (Device Details)
 
-After Excel sync, NinjaOne sync often runs automatically to populate serial numbers and OS info. You can also trigger it via cron (see README). Devices from Excel are matched to NinjaOne by name/serial.
+NinjaOne sync populates serial numbers and OS info. You can also trigger it via cron (see README). Devices are matched to NinjaOne by name/serial.
 
 ### Step 5: Verify Device Data
 
@@ -487,17 +438,17 @@ If you need to deploy elsewhere later, the app is standard Next.js 14 — `npm r
 
 ### Common Issues
 
-#### "Failed to sync Excel data" / SharePoint errors
+#### "Failed to sync" / SharePoint workbook errors
 
 **Possible causes**:
 - Azure credentials incorrect or missing
 - SharePoint/OneDrive permissions not granted
-- Excel file name or location wrong
+- Workbook env var / file name wrong
 
 **Solutions**:
 1. Verify AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID in `.env`
 2. Check Azure App has Sites.Read.All or Files.Read.All (and admin consent)
-3. Confirm file name "BP Employee list and inventory.xlsx" and path (see SHAREPOINT_SETUP.md)
+3. Confirm `ONBOARDING_WORKBOOK` / `DEVICE_INVENTORY_WORKBOOK` and `SHAREPOINT_SITE_PATH`
 4. Check sync logs on the Sync page for details
 
 #### "No devices showing for employees"
@@ -565,7 +516,6 @@ After successful setup:
 
 1. **Network Inventory** (v2 in progress):
    - Configure the 11 offices via `/settings/offices`
-   - Optionally enable Auvik sync (`AUVIK_API_USER` / `AUVIK_API_KEY` / `AUVIK_TENANT_DOMAIN`)
    - Manually add or CSV-import switches, APs, firewalls, and servers per office
 
 2. **Customization**:

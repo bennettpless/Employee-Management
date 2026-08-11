@@ -75,7 +75,8 @@ export async function POST(
         .from('devices')
         .update({ 
           employee_id: params.id,
-          device_type: device_type || existingDevice.device_type || null
+          device_type: device_type || existingDevice.device_type || null,
+          status: existingDevice.status === 'in_stock' ? 'active' : existingDevice.status,
         })
         .eq('id', existingDevice.id)
       

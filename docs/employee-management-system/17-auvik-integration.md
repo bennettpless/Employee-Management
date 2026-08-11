@@ -1,6 +1,14 @@
 # Phase 17: Auvik Integration (Optional)
 
-## Status: ✅ Complete
+## Status: ❌ REMOVED IN PHASE 22
+
+> **This phase shipped and was later removed.** Auvik was used once to seed the
+> `network_devices` / `network_device_connections` tables across the 11 offices,
+> then the operator elected to maintain the network inventory manually. All
+> Auvik code, config, DB columns, and env vars were ripped out in
+> [Phase 22](./22-auvik-removal.md). This document is preserved for historical
+> context — do not act on it. Anything below that talks about Auvik being live
+> is stale as of Phase 22.
 
 ## Overview
 

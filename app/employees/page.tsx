@@ -1,181 +1,200 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Users as UsersIcon, Loader2, UserPlus } from 'lucide-react'
-import EmployeeCard from '@/components/EmployeeCard'
-import EmployeeFilters, { FilterState } from '@/components/EmployeeFilters'
-import { Employee } from '@/lib/types'
+import { ArrowLeft, Loader2, Pencil, Search, Users } from 'lucide-react'
+import EmployeeFormModal, {
+  type EmployeeEditValues,
+} from '@/components/employees/EmployeeFormModal'
+
+interface EmployeeRow extends EmployeeEditValues {
+  devices?: Array<{ count: number }>
+}
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
+  const [employees, setEmployees] = useState<EmployeeRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState<FilterState>({
-    search: '',
-    status: '',
-    department: '',
-    office: '',
-    branch: ''
-  })
+  const [searchTerm, setSearchTerm] = useState('')
+  const [editing, setEditing] = useState<EmployeeRow | null>(null)
 
-  useEffect(() => {
-    fetchEmployees()
-  }, [])
-
-  useEffect(() => {
-    applyFilters()
-  }, [employees, filters])
-
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true)
-      // Add cache-busting to ensure fresh data
-      const response = await fetch(`/api/employees?t=${Date.now()}`, {
-        cache: 'no-store'
-      })
-      const data = await response.json()
+      const params = new URLSearchParams()
+      params.set('status', 'active')
+      if (searchTerm.trim()) params.set('search', searchTerm.trim())
+      const res = await fetch(`/api/employees?${params}`, { cache: 'no-store' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load employees')
       setEmployees(data.employees || [])
-    } catch (error) {
-      console.error('Error fetching employees:', error)
+    } catch (err) {
+      console.error(err)
+      setEmployees([])
     } finally {
       setLoading(false)
     }
-  }
+  }, [searchTerm])
 
-  const applyFilters = () => {
-    let filtered = [...employees]
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void fetchEmployees()
+    }, searchTerm ? 250 : 0)
+    return () => clearTimeout(t)
+  }, [fetchEmployees, searchTerm])
 
-    // Search filter
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase()
-      filtered = filtered.filter(emp => 
-        emp.display_name?.toLowerCase().includes(searchLower) ||
-        emp.email?.toLowerCase().includes(searchLower) ||
-        emp.first_name?.toLowerCase().includes(searchLower) ||
-        emp.last_name?.toLowerCase().includes(searchLower)
+  const rows = useMemo(() => {
+    return [...employees].sort((a, b) =>
+      (a.display_name || a.email || '').localeCompare(
+        b.display_name || b.email || '',
+        undefined,
+        { sensitivity: 'base' }
       )
-    }
-
-    // Status filter
-    if (filters.status) {
-      filtered = filtered.filter(emp => emp.employment_status === filters.status)
-    }
-
-    // Department filter - exact match for dropdown selection
-    if (filters.department) {
-      filtered = filtered.filter(emp => 
-        emp.department?.toLowerCase() === filters.department.toLowerCase()
-      )
-    }
-
-    // Office filter - exact match for dropdown selection
-    if (filters.office) {
-      filtered = filtered.filter(emp => 
-        emp.office_location?.toLowerCase() === filters.office.toLowerCase()
-      )
-    }
-
-    // Branch filter - exact match for dropdown selection
-    if (filters.branch) {
-      filtered = filtered.filter(emp => 
-        (emp as any).branch_name?.toLowerCase() === filters.branch.toLowerCase()
-      )
-    }
-
-    setFilteredEmployees(filtered)
-  }
-
-  const handleFilterChange = useCallback((newFilters: FilterState) => {
-    setFilters(newFilters)
-  }, [])
-
-  const stats = {
-    total: employees.length,
-    active: employees.filter(e => e.employment_status === 'active').length,
-    terminated: employees.filter(e => e.employment_status === 'terminated').length,
-    filtered: filteredEmployees.length
-  }
+    )
+  }, [employees])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
-          <Link 
+          <Link
             href="/"
             className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Home
           </Link>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">Employees</h1>
-              <p className="text-gray-600">
-                Manage and view all employees synced from Excel or added manually
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                Employees
+                {!loading && (
+                  <span className="ml-3 text-2xl font-normal text-gray-500">
+                    ({rows.length})
+                  </span>
+                )}
+              </h1>
+              <p className="text-gray-600 max-w-2xl">
+                Active employees from onboarding sync. New hires are added here
+                automatically; use Edit to fix name or email typos. Offboarding
+                sync removes departed employees from this list.
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <Link
-                href="/onboard"
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                Onboard Employee
-              </Link>
-              <UsersIcon className="w-8 h-8 text-blue-600" />
-            </div>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="text-sm text-gray-600 mb-1">Total Employees</div>
-            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="text-sm text-gray-600 mb-1">Active</div>
-            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="text-sm text-gray-600 mb-1">Terminated</div>
-            <div className="text-2xl font-bold text-red-600">{stats.terminated}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="text-sm text-gray-600 mb-1">Showing</div>
-            <div className="text-2xl font-bold text-blue-600">{stats.filtered}</div>
+        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+          <div className="relative max-w-md">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search name or email..."
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
           </div>
         </div>
 
-        {/* Filters */}
-        <EmployeeFilters onFilterChange={handleFilterChange} />
-
-        {/* Employee Grid */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
           </div>
-        ) : filteredEmployees.length === 0 ? (
+        ) : rows.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <UsersIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
               No employees found
             </h3>
             <p className="text-gray-600">
-              Try adjusting your filters or search criteria
+              Try a different search, or run onboarding sync for new hires
             </p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEmployees.map((employee) => (
-              <EmployeeCard key={employee.id} employee={employee} />
-            ))}
+          <div className="bg-white rounded-lg shadow-md overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Name
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Email
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Username
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Title
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Location
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Devices
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {rows.map((emp) => (
+                  <tr key={emp.id} className="hover:bg-blue-50/50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {emp.display_name ||
+                        [emp.first_name, emp.last_name].filter(Boolean).join(' ') ||
+                        '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700 font-mono">
+                      {emp.email}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {emp.username || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {emp.job_title || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {emp.office_location || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {emp.devices?.[0]?.count ?? 0}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setEditing(emp)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <Pencil className="w-4 h-4" />
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+      {editing && (
+        <EmployeeFormModal
+          employee={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            void fetchEmployees()
+          }}
+          onDeleted={() => {
+            setEditing(null)
+            void fetchEmployees()
+          }}
+          onDevicesChanged={() => {
+            void fetchEmployees()
+          }}
+        />
+      )}
     </div>
   )
 }
-

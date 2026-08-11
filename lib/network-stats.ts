@@ -4,16 +4,6 @@ import type {
   Office,
 } from '@/lib/types'
 
-// Priority used to pick the single "worst" status to colour an office marker.
-// Higher number = worse. critical > offline > warning > unknown > online.
-export const STATUS_RANK: Record<NetworkDeviceStatus, number> = {
-  critical: 5,
-  offline: 4,
-  warning: 3,
-  unknown: 2,
-  online: 1,
-}
-
 export type StatusCounts = Record<NetworkDeviceStatus, number>
 
 export interface OfficeWithStats extends Office {
@@ -35,8 +25,9 @@ function emptyStatusCounts(): StatusCounts {
 /**
  * Build per-office aggregate stats for the network dashboard + map:
  *   - deviceCount   total devices assigned to the office
- *   - statusCounts  per-status counts
- *   - worstStatus   highest-severity status present (online if no devices)
+ *   - statusCounts  per-status counts (shown in the map popup)
+ *   - worstStatus   the office's own manually-set status (online/offline) —
+ *                   an offline device no longer marks the whole office offline
  *
  * Devices with `office_id === null` are skipped (they're surfaced separately
  * via the "unassigned devices" UI in `app/network/page.tsx`).
@@ -67,19 +58,7 @@ export function aggregateOfficeStats(
       ...office,
       deviceCount: bucket.count,
       statusCounts: bucket.status,
-      worstStatus: pickWorstStatus(bucket.status),
+      worstStatus: office.status === 'offline' ? 'offline' : 'online',
     }
   })
-}
-
-function pickWorstStatus(counts: StatusCounts): NetworkDeviceStatus {
-  let worst: NetworkDeviceStatus = 'online'
-  let worstRank = -1
-  for (const status of Object.keys(counts) as NetworkDeviceStatus[]) {
-    if (counts[status] > 0 && STATUS_RANK[status] > worstRank) {
-      worst = status
-      worstRank = STATUS_RANK[status]
-    }
-  }
-  return worst
 }

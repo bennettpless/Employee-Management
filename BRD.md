@@ -178,7 +178,7 @@ The Employee Management System is an internal web application that provides a si
 
 - NinjaOne sync depends on third-party API; rate limits and availability apply.
 - Device matching between app and NinjaOne is best-effort (name/serial); naming conventions affect match quality.
-- Excel-related database columns (excel_data, etc.) remain in schema but are no longer actively used.
+- Unused Excel-era columns (`excel_data`, etc.) were dropped in Phase 23; `username` and `extension` remain because onboarding sync still writes them.
 
 ---
 

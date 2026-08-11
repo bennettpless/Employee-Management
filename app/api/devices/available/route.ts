@@ -3,8 +3,7 @@ import { getServiceSupabase } from '@/lib/supabase'
 
 /**
  * GET /api/devices/available?search=...&include_assigned=false
- * Returns devices available for assignment (from NinjaOne or Intune sync).
- * Used by the DevicePicker component.
+ * Returns inventory devices available for assignment.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -16,9 +15,9 @@ export async function GET(request: NextRequest) {
     
     let query = supabase
       .from('devices')
-      .select('id, device_name, device_type, manufacturer, model, serial_number, os_name, is_in_ninja, azure_device_id, employee_id')
-      .or('is_in_ninja.eq.true,azure_device_id.not.is.null')
-      .order('device_name', { ascending: true })
+      .select('id, device_name, device_type, asset_tag, asset_type, manufacturer, model, serial_number, status, employee_id')
+      .neq('status', 'decommissioned')
+      .order('asset_tag', { ascending: true, nullsFirst: false })
       .limit(50)
     
     if (!includeAssigned) {
@@ -28,7 +27,7 @@ export async function GET(request: NextRequest) {
     if (search.trim()) {
       const term = search.trim().replace(/[%_\\().,]/g, '')
       if (term) {
-        query = query.or(`device_name.ilike.%${term}%,serial_number.ilike.%${term}%,model.ilike.%${term}%`)
+        query = query.or(`device_name.ilike.%${term}%,serial_number.ilike.%${term}%,model.ilike.%${term}%,asset_tag.ilike.%${term}%`)
       }
     }
     

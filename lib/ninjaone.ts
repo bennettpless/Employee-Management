@@ -71,17 +71,27 @@ class NinjaOneClient {
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
-    const token = await this.getAccessToken()
     const url = `${this.getBaseUrl()}/v2${endpoint}`
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      }
-    })
+    const doFetch = async () => {
+      const token = await this.getAccessToken()
+      return fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      })
+    }
+
+    let response = await doFetch()
+    if (response.status === 401) {
+      // Cached token may have been revoked server-side — refresh and retry once
+      this.accessToken = null
+      this.tokenExpiry = 0
+      response = await doFetch()
+    }
 
     if (!response.ok) {
       throw new Error(`NinjaOne API error: ${response.statusText}`)

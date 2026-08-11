@@ -398,14 +398,6 @@ export default function NetworkDeviceTable({
                     <td className="px-4 py-3">
                       <span className="text-xs text-gray-600 capitalize">
                         {device.source}
-                        {device.is_manually_overridden && (
-                          <span
-                            className="ml-1 text-blue-600"
-                            title="Manual override is on — Auvik sync will skip this device"
-                          >
-                            ●
-                          </span>
-                        )}
                       </span>
                     </td>
                     {canEdit && (

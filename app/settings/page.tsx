@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { format } from 'date-fns'
-import { ArrowLeft, Settings as SettingsIcon, Database, Shield, RefreshCw, CheckCircle, XCircle, Loader2, Building2, ChevronRight, Network as NetworkIcon } from 'lucide-react'
+import { ArrowLeft, Database, Shield, RefreshCw, CheckCircle, XCircle, Loader2, Building2, ChevronRight } from 'lucide-react'
 
 interface ServiceStatus {
   name: string
@@ -16,18 +15,6 @@ interface ServiceStatus {
 interface HealthResponse {
   status: 'healthy' | 'degraded'
   services: ServiceStatus[]
-}
-
-interface AuvikStatusResponse {
-  configured: boolean
-  lastSync: {
-    status: string
-    started_at: string
-    completed_at: string | null
-    duration_seconds: number | null
-    records_synced: number
-    records_failed: number
-  } | null
 }
 
 function StatusBadge({ service }: { service: ServiceStatus | undefined; }) {
@@ -63,7 +50,6 @@ export default function SettingsPage() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
-  const [auvik, setAuvik] = useState<AuvikStatusResponse | null>(null)
 
   const runHealthCheck = useCallback(async () => {
     setLoading(true)
@@ -90,29 +76,9 @@ export default function SettingsPage() {
     runHealthCheck()
   }, [runHealthCheck])
 
-  useEffect(() => {
-    let cancelled = false
-    const loadAuvikStatus = async () => {
-      try {
-        const res = await fetch('/api/network/sync/auvik', { cache: 'no-store' })
-        if (!res.ok) {
-          if (!cancelled) setAuvik({ configured: false, lastSync: null })
-          return
-        }
-        const data: AuvikStatusResponse = await res.json()
-        if (!cancelled) setAuvik(data)
-      } catch {
-        if (!cancelled) setAuvik({ configured: false, lastSync: null })
-      }
-    }
-    loadAuvikStatus()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const supabaseStatus = health?.services.find((s) => s.name === 'Supabase')
   const ninjaStatus = health?.services.find((s) => s.name === 'NinjaOne')
+  const azureStatus = health?.services.find((s) => s.name === 'Azure')
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -174,88 +140,6 @@ export default function SettingsPage() {
         )}
 
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Auvik Settings (Phase 17, optional) */}
-          <div className="bg-white rounded-lg shadow-md p-6 md:col-span-2">
-            <div className="flex items-center mb-4">
-              <div
-                className={`rounded-lg p-3 mr-4 ${
-                  auvik?.configured ? 'bg-purple-100' : 'bg-gray-100'
-                }`}
-              >
-                <NetworkIcon
-                  className={`w-6 h-6 ${
-                    auvik?.configured ? 'text-purple-600' : 'text-gray-400'
-                  }`}
-                />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Auvik</h3>
-                <p className="text-sm text-gray-600">
-                  Optional network device + topology sync. When configured, runs
-                  daily at 4:00 AM UTC and can be triggered manually from the
-                  Sync page.
-                </p>
-              </div>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-gray-600">Status:</span>
-                {auvik === null ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                ) : auvik.configured ? (
-                  <span className="inline-flex items-center gap-1.5 text-purple-600 font-medium">
-                    <CheckCircle className="w-4 h-4" />
-                    Configured
-                  </span>
-                ) : (
-                  <span className="text-gray-500">Not configured</span>
-                )}
-              </div>
-              {auvik?.configured && (
-                <>
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-600">Last sync:</span>
-                    <span className="font-medium text-gray-900">
-                      {auvik.lastSync?.completed_at
-                        ? format(new Date(auvik.lastSync.completed_at), 'MMM d, yyyy h:mm a')
-                        : auvik.lastSync?.started_at
-                        ? `Started ${format(new Date(auvik.lastSync.started_at), 'MMM d, yyyy h:mm a')} (incomplete)`
-                        : 'Never'}
-                    </span>
-                  </div>
-                  {auvik.lastSync && (
-                    <div className="flex justify-between py-2 border-b border-gray-200">
-                      <span className="text-gray-600">Last result:</span>
-                      <span
-                        className={`font-medium capitalize ${
-                          auvik.lastSync.status === 'success'
-                            ? 'text-green-600'
-                            : auvik.lastSync.status === 'partial'
-                            ? 'text-yellow-600'
-                            : 'text-red-600'
-                        }`}
-                      >
-                        {auvik.lastSync.status} ·{' '}
-                        {auvik.lastSync.records_synced} synced
-                        {auvik.lastSync.records_failed > 0
-                          ? ` · ${auvik.lastSync.records_failed} failed`
-                          : ''}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
-              <p className="text-xs text-gray-500 mt-4">
-                Configure in .env: AUVIK_API_USER, AUVIK_API_KEY,
-                AUVIK_TENANT_DOMAIN. See{' '}
-                <Link href="/settings/offices" className="text-blue-600 hover:underline">
-                  Office Management
-                </Link>{' '}
-                to map each office to its Auvik network ID.
-              </p>
-            </div>
-          </div>
-
           {/* Supabase Settings */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center mb-4">
@@ -303,7 +187,9 @@ export default function SettingsPage() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">NinjaOne</h3>
-                <p className="text-sm text-gray-600">Device hardware and OS sync</p>
+                <p className="text-sm text-gray-600">
+                  Device detail lookups — new machines from onboarding are pulled from NinjaOne
+                </p>
               </div>
             </div>
             <div className="space-y-2 text-sm">
@@ -315,14 +201,6 @@ export default function SettingsPage() {
                   <StatusBadge service={ninjaStatus} />
                 )}
               </div>
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-600">Device sync:</span>
-                <span className="font-medium text-purple-600">Enabled</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-600">Schedule:</span>
-                <span className="font-medium text-gray-900">Daily at 3:00 AM UTC</span>
-              </div>
               {ninjaStatus?.error && (
                 <div className="py-2 border-b border-gray-200">
                   <p className="text-xs text-red-500">{ninjaStatus.error}</p>
@@ -330,6 +208,43 @@ export default function SettingsPage() {
               )}
               <p className="text-xs text-gray-500 mt-4">
                 Configure in .env: NINJA_CLIENT_ID, NINJA_CLIENT_SECRET, NINJA_REGION
+              </p>
+            </div>
+          </div>
+
+          {/* Azure / Microsoft Graph */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="flex items-center mb-4">
+              <div className={`rounded-lg p-3 mr-4 ${
+                azureStatus?.status === 'connected' ? 'bg-blue-100' : azureStatus?.status === 'error' ? 'bg-red-100' : 'bg-gray-100'
+              }`}>
+                <Shield className={`w-6 h-6 ${
+                  azureStatus?.status === 'connected' ? 'text-blue-600' : azureStatus?.status === 'error' ? 'text-red-600' : 'text-gray-400'
+                }`} />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Azure (Microsoft Entra / Graph)</h3>
+                <p className="text-sm text-gray-600">
+                  Sign-in, employee data, and reading the SharePoint onboarding/offboarding workbook
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-600">Status:</span>
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                ) : (
+                  <StatusBadge service={azureStatus} />
+                )}
+              </div>
+              {azureStatus?.error && (
+                <div className="py-2 border-b border-gray-200">
+                  <p className="text-xs text-red-500">{azureStatus.error}</p>
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-4">
+                Configure in .env: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID
               </p>
             </div>
           </div>
@@ -363,16 +278,6 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Setup Instructions */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-8">
-          <h3 className="text-lg font-semibold text-blue-900 mb-3">Setup Instructions</h3>
-          <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
-            <li>Copy .env.example to .env and fill in your credentials</li>
-            <li>Run the Supabase schema.sql file to create database tables</li>
-            <li>Set up NinjaOne API credentials for device sync</li>
-            <li>Deploy to Vercel for automated daily NinjaOne sync via cron</li>
-          </ol>
-        </div>
       </div>
     </div>
   )

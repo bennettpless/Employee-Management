@@ -22,7 +22,6 @@ export interface NetworkDeviceFormState {
   status: NetworkDeviceStatus
   credentials_vault_ref: string
   notes: string
-  is_manually_overridden: boolean
 }
 
 export const EMPTY_DEVICE_FORM: NetworkDeviceFormState = {
@@ -39,7 +38,6 @@ export const EMPTY_DEVICE_FORM: NetworkDeviceFormState = {
   status: 'unknown',
   credentials_vault_ref: '',
   notes: '',
-  is_manually_overridden: false,
 }
 
 export function deviceToForm(device: NetworkDevice): NetworkDeviceFormState {
@@ -57,7 +55,6 @@ export function deviceToForm(device: NetworkDevice): NetworkDeviceFormState {
     status: device.status,
     credentials_vault_ref: device.credentials_vault_ref ?? '',
     notes: device.notes ?? '',
-    is_manually_overridden: device.is_manually_overridden ?? false,
   }
 }
 
@@ -76,7 +73,6 @@ export function formToBody(form: NetworkDeviceFormState) {
     status: form.status,
     credentials_vault_ref: form.credentials_vault_ref.trim() || null,
     notes: form.notes.trim() || null,
-    is_manually_overridden: form.is_manually_overridden,
   }
 }
 
@@ -103,7 +99,6 @@ interface NetworkDeviceFormProps {
   setForm: (form: NetworkDeviceFormState) => void
   offices: Pick<Office, 'id' | 'name' | 'city' | 'state'>[]
   preselectedOfficeId?: string
-  showAuvikNotice?: boolean
   saving: boolean
   errorMessage: string | null
   onSave: () => void
@@ -116,7 +111,6 @@ export default function NetworkDeviceForm({
   setForm,
   offices,
   preselectedOfficeId,
-  showAuvikNotice = false,
   saving,
   errorMessage,
   onSave,
@@ -149,17 +143,6 @@ export default function NetworkDeviceForm({
             <X className="w-6 h-6" />
           </button>
         </div>
-
-        {showAuvikNotice && !form.is_manually_overridden && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-            <p className="font-medium">Auvik-synced device</p>
-            <p className="mt-1">
-              This device is kept in sync by Auvik. Toggle{' '}
-              <strong>Manual override</strong> below to make hand-edits stick
-              (the next Auvik sync will skip this row while the toggle is on).
-            </p>
-          </div>
-        )}
 
         {errorMessage && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -378,32 +361,6 @@ export default function NetworkDeviceForm({
             />
           </div>
 
-          {mode === 'edit' && (
-            <div className="md:col-span-2">
-              <label
-                className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200"
-                title="Auvik sync will skip this device while manual override is on"
-              >
-                <input
-                  type="checkbox"
-                  checked={form.is_manually_overridden}
-                  onChange={(e) =>
-                    update('is_manually_overridden', e.target.checked)
-                  }
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                />
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900">
-                    Manual override
-                  </div>
-                  <div className="text-gray-600">
-                    When on, the Auvik sync will not overwrite this device's
-                    fields. Use this for hand-tuned values you want to keep.
-                  </div>
-                </div>
-              </label>
-            </div>
-          )}
         </div>
 
         <div className="flex justify-end gap-4 mt-6">

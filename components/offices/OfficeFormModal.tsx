@@ -14,8 +14,8 @@ export interface OfficeFormState {
   country: string
   latitude: string
   longitude: string
-  auvik_network_id: string
   notes: string
+  status: 'online' | 'offline'
 }
 
 export const EMPTY_OFFICE_FORM: OfficeFormState = {
@@ -28,8 +28,8 @@ export const EMPTY_OFFICE_FORM: OfficeFormState = {
   country: 'USA',
   latitude: '',
   longitude: '',
-  auvik_network_id: '',
   notes: '',
+  status: 'online',
 }
 
 export function officeToForm(office: Office): OfficeFormState {
@@ -43,8 +43,8 @@ export function officeToForm(office: Office): OfficeFormState {
     country: office.country ?? 'USA',
     latitude: office.latitude == null ? '' : String(office.latitude),
     longitude: office.longitude == null ? '' : String(office.longitude),
-    auvik_network_id: office.auvik_network_id ?? '',
     notes: office.notes ?? '',
+    status: office.status === 'offline' ? 'offline' : 'online',
   }
 }
 
@@ -111,7 +111,7 @@ export default function OfficeFormModal({
     }
   }
 
-  const update = (field: keyof OfficeFormState, value: string) =>
+  const update = <K extends keyof OfficeFormState>(field: K, value: OfficeFormState[K]) =>
     setForm({ ...form, [field]: value })
 
   return (
@@ -270,14 +270,18 @@ export default function OfficeFormModal({
           )}
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Auvik Network ID</label>
-            <input
-              type="text"
-              value={form.auvik_network_id}
-              onChange={(e) => update('auvik_network_id', e.target.value)}
-              placeholder="Optional — for Auvik sync mapping"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              value={form.status}
+              onChange={(e) => update('status', e.target.value as 'online' | 'offline')}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Set manually — the office status is not affected by individual device statuses.
+            </p>
           </div>
 
           <div className="md:col-span-2">

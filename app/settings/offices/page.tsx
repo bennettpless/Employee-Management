@@ -35,8 +35,8 @@ function formToBody(form: OfficeFormState) {
     country: form.country.trim() || null,
     latitude: form.latitude.trim() === '' ? null : Number(form.latitude),
     longitude: form.longitude.trim() === '' ? null : Number(form.longitude),
-    auvik_network_id: form.auvik_network_id.trim() || null,
     notes: form.notes.trim() || null,
+    status: form.status,
   }
 }
 
@@ -265,9 +265,9 @@ export default function OfficesAdminPage() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-gray-700">Name</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-700">Status</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-700">City / State</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-700">Lat / Lng</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-700">Auvik Network ID</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-700">Devices</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-700">Actions</th>
                   </tr>
@@ -276,6 +276,15 @@ export default function OfficesAdminPage() {
                   {offices.map((office) => (
                     <tr key={office.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-900">{office.name}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                          office.status === 'offline'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {office.status || 'online'}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-gray-700">
                         {[office.city, office.state].filter(Boolean).join(', ') || (
                           <span className="text-gray-400">—</span>
@@ -287,9 +296,6 @@ export default function OfficesAdminPage() {
                         ) : (
                           <span className="text-gray-400">—</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700 font-mono text-xs">
-                        {office.auvik_network_id || <span className="text-gray-400">—</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-700">
                         {office.device_count ?? 0}

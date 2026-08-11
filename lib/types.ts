@@ -11,7 +11,6 @@ export interface Employee {
   phone_number: string | null
   mobile_phone: string | null
   manager_entra_id: string | null
-  dpt_manager: string | null
   employment_status: 'active' | 'terminated' | 'on_leave'
   hire_date: string | null
   termination_date: string | null
@@ -20,19 +19,32 @@ export interface Employee {
   updated_at: string
 }
 
+export type DeviceStatus = 'active' | 'in_stock' | 'repair' | 'decommissioned'
+
+export type AssetType = 'laptop' | 'desktop' | 'monitor' | 'tv' | 'printer' | 'server' | 'other'
+
 export interface Device {
   id: string
-  ninja_device_id: string
+  ninja_device_id: string | null
   employee_id: string | null
   device_name: string | null
   device_type: string | null
   manufacturer: string | null
   model: string | null
   serial_number: string | null
+  asset_tag: string | null
+  asset_type: AssetType | null
+  department: string | null
+  location: string | null
+  commissioned_at: string | null
+  decommissioned_at: string | null
+  warranty_months: number | null
+  warranty_end: string | null
+  notes: string | null
   os_name: string | null
   os_version: string | null
   last_seen: string | null
-  status: 'active' | 'inactive' | 'retired'
+  status: DeviceStatus
   azure_device_id: string | null
   is_in_ninja: boolean
   last_synced_at: string
@@ -41,9 +53,22 @@ export interface Device {
   employee?: Employee
 }
 
+export interface DeviceHistoryEntry {
+  id: string
+  device_id: string
+  event_type: 'repair' | 'upgrade' | 'note'
+  event_date: string
+  description: string
+  created_at: string
+}
+
 export interface SyncLog {
   id: string
-  sync_type: 'entra_id' | 'ninjaone' | 'intune' | 'auvik' | 'excel'
+  // `'auvik'` is a dead value as of Phase 22 — the Auvik integration was
+  // removed. It stays in the union so historical `sync_logs` rows for past
+  // Auvik runs (which the DB still holds) type-check on read; no new code
+  // ever writes it.
+  sync_type: 'entra_id' | 'ninjaone' | 'intune' | 'auvik' | 'excel' | 'onboarding' | 'device_inventory'
   status: 'success' | 'partial' | 'failed'
   records_synced: number
   records_failed: number
@@ -75,8 +100,8 @@ export interface Office {
   country: string | null
   latitude: number | null
   longitude: number | null
-  auvik_network_id: string | null
   notes: string | null
+  status: 'online' | 'offline'
   created_at: string
   updated_at: string
 }
@@ -96,13 +121,12 @@ export type NetworkDeviceStatus =
   | 'critical'
   | 'unknown'
 
-export type NetworkDeviceSource = 'manual' | 'auvik' | 'csv'
+export type NetworkDeviceSource = 'manual' | 'csv'
 
 export type NetworkLinkType = 'ethernet' | 'fiber' | 'wireless' | 'other'
 
 export interface NetworkDevice {
   id: string
-  auvik_device_id: string | null
   office_id: string | null
   name: string
   device_type: NetworkDeviceType
@@ -118,7 +142,6 @@ export interface NetworkDevice {
   credentials_vault_ref: string | null
   notes: string | null
   source: NetworkDeviceSource
-  is_manually_overridden: boolean
   last_synced_at: string | null
   // Per-office React Flow topology position. NULL on devices that haven't been
   // laid out yet (the topology API auto-places those). Stored as DECIMAL in
@@ -137,7 +160,6 @@ export interface NetworkDeviceConnection {
   source_port: string | null
   target_port: string | null
   link_type: NetworkLinkType | null
-  auvik_link_id: string | null
   last_synced_at: string | null
   created_at: string
 }

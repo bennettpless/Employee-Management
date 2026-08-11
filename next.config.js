@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Self-contained production bundle for Azure App Service (run with `node server.js`)
+  output: 'standalone',
   experimental: {
     instrumentationHook: true,
   },

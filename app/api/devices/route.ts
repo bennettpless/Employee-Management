@@ -1,127 +1,129 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
+import {
+  ASSET_TYPES,
+  DEPARTMENTS,
+  DEVICE_STATUSES,
+  officeNameToLocation,
+  sanitizeDeviceBody,
+} from '@/lib/devices'
+import { currentActor, logAudit } from '@/lib/audit'
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = getServiceSupabase()
     const searchParams = new URL(request.url).searchParams
-    const filterType = searchParams.get('filter') || 'all' // 'all', 'ninja-only', 'azure-only'
-    
-    // Fetch ALL devices first (without filters) so we can deduplicate properly
-    // This ensures devices that exist in both systems don't show up incorrectly in filters
-    const { data: allDevices, error } = await supabase
+    const status = searchParams.get('status')
+    const assetType = searchParams.get('asset_type')
+    const department = searchParams.get('department')
+    const location = searchParams.get('location')
+
+    let query = supabase
       .from('devices')
       .select(`
         *,
         employee:employees(id, display_name, email, first_name, last_name)
       `)
-      .order('device_name', { ascending: true })
+      .order('asset_tag', { ascending: true, nullsFirst: false })
 
-    if (error) {
-      throw error
+    if (status && DEVICE_STATUSES.includes(status as any)) {
+      query = query.eq('status', status)
+    }
+    if (assetType && ASSET_TYPES.includes(assetType as any)) {
+      query = query.eq('asset_type', assetType)
+    }
+    if (department) {
+      query = query.eq('department', department)
+    }
+    if (location) {
+      query = query.eq('location', location)
     }
 
-    // Deduplicate devices by serial number BEFORE filtering
-    // If multiple devices have the same serial number, keep only the best one
-    // Priority: 1) Devices in both systems (azure_device_id IS NOT NULL AND is_in_ninja = true)
-    //           2) Active devices over inactive
-    //           3) Latest last_synced_at
-    // This prevents the same device from appearing multiple times with different prefixes
-    const deviceMapBySerial = new Map<string, any>()
-    
-    if (allDevices && allDevices.length > 0) {
-      allDevices.forEach((device: any) => {
-        const serialNumber = (device.serial_number || '').trim().toUpperCase()
-        
-        if (!serialNumber) {
-          // If no serial number, keep as-is (might be unique devices without serials)
-          // Use device ID as key for uniqueness
-          const key = `no-serial-${device.id}`
-          if (!deviceMapBySerial.has(key)) {
-            deviceMapBySerial.set(key, device)
-          }
-          return
-        }
-        
-        if (!deviceMapBySerial.has(serialNumber)) {
-          // First device with this serial number
-          deviceMapBySerial.set(serialNumber, device)
-        } else {
-          // Device with same serial number already exists - decide which to keep
-          const existing = deviceMapBySerial.get(serialNumber)!
-          
-          // Priority 1: Devices in both systems (preferred)
-          const existingInBoth = existing.azure_device_id && existing.is_in_ninja
-          const currentInBoth = device.azure_device_id && device.is_in_ninja
-          
-          if (currentInBoth && !existingInBoth) {
-            // Current is in both systems, existing is not - use current
-            deviceMapBySerial.set(serialNumber, device)
-            return
-          } else if (!currentInBoth && existingInBoth) {
-            // Existing is in both systems, current is not - keep existing
-            return
-          }
-          
-          // Priority 2: Active devices over inactive
-          const existingIsActive = existing.status === 'active'
-          const currentIsActive = device.status === 'active'
-          
-          if (currentIsActive && !existingIsActive) {
-            // Current device is active, existing is inactive - use current
-            deviceMapBySerial.set(serialNumber, device)
-          } else if (!currentIsActive && existingIsActive) {
-            // Existing device is active, current is inactive - keep existing
-            // Do nothing, keep existing
-          } else {
-            // Both are same status - use latest last_synced_at
-            const existingDate = existing.last_synced_at || '1970-01-01'
-            const currentDate = device.last_synced_at || '1970-01-01'
-            
-            if (currentDate > existingDate) {
-              // Current device is newer - use it instead
-              deviceMapBySerial.set(serialNumber, device)
-            }
-            // Otherwise keep the existing one
-          }
-        }
-      })
-    }
-    
-    // Convert map values back to array
-    let deduplicatedDevices = Array.from(deviceMapBySerial.values())
-    
-    // Apply filters AFTER deduplication
-    if (filterType === 'ninja-only') {
-      // NinjaOne Only: is_in_ninja = true AND azure_device_id IS NULL
-      deduplicatedDevices = deduplicatedDevices.filter(
-        (device: any) => device.is_in_ninja === true && !device.azure_device_id
-      )
-    } else if (filterType === 'azure-only') {
-      // Azure Only: azure_device_id IS NOT NULL AND is_in_ninja = false
-      deduplicatedDevices = deduplicatedDevices.filter(
-        (device: any) => device.azure_device_id && device.is_in_ninja === false
-      )
-    }
-    
-    // Sort by device name
-    deduplicatedDevices.sort((a: any, b: any) => {
-      const nameA = (a.device_name || '').toLowerCase()
-      const nameB = (b.device_name || '').toLowerCase()
-      return nameA.localeCompare(nameB)
+    const { data: devices, error } = await query
+    if (error) throw error
+
+    // Full inventory scan — used for `flaggedDepartments` / `flaggedLocations`
+    // below (those must reflect the entire DB regardless of what the user is
+    // currently filtering on) AND as the source for the chip counts.
+    const { data: allRows, error: countError } = await supabase
+      .from('devices')
+      .select('status, asset_type, department, location')
+    if (countError) throw countError
+
+    const rows = allRows || []
+
+    // The status count chips at the top of `/devices` reflect the currently
+    // applied NON-STATUS filters (asset_type / department / location) so the
+    // user sees a status breakdown WITHIN their current filter selection.
+    // We deliberately ignore `status` here so the "Repair" chip still tells
+    // you how many are in Repair when you've clicked "Active", instead of
+    // going to zero. Search is client-side and not applied to chip counts.
+    const chipRows = rows.filter((d: any) => {
+      if (assetType && d.asset_type !== assetType) return false
+      if (department && d.department !== department) return false
+      if (location && d.location !== location) return false
+      return true
     })
 
-    const allDeduped = Array.from(deviceMapBySerial.values())
-    const counts = {
-      all: allDeduped.length,
-      inNinja: allDeduped.filter((d: any) => d.is_in_ninja === true).length,
-      inAzure: allDeduped.filter((d: any) => !!d.azure_device_id).length,
-      ninjaOnly: allDeduped.filter((d: any) => d.is_in_ninja === true && !d.azure_device_id).length,
-      azureOnly: allDeduped.filter((d: any) => d.azure_device_id && d.is_in_ninja === false).length,
-      inBoth: allDeduped.filter((d: any) => d.is_in_ninja === true && !!d.azure_device_id).length,
+    const counts: Record<string, number> = { all: chipRows.length }
+    for (const s of DEVICE_STATUSES) {
+      counts[s] = chipRows.filter((d: any) => d.status === s).length
+    }
+    const typeCounts: Record<string, number> = {}
+    for (const t of ASSET_TYPES) {
+      typeCounts[t] = chipRows.filter((d: any) => d.asset_type === t).length
     }
 
-    return NextResponse.json({ devices: deduplicatedDevices, counts })
+    // Phase 21: filter dropdowns are hardcoded to the canonical lists so a
+    // one-off typo can't sneak into the filter menu.
+    //   - Departments come from `DEPARTMENTS` in `lib/devices.ts`.
+    //   - Locations = every office's short name + "Remote".
+    // Values already on rows that fall OUTSIDE those sets are returned in
+    // `flaggedDepartments` / `flaggedLocations` so the UI can mark those rows
+    // for admin cleanup. `null` is treated as "unset" and is NOT flagged.
+    const { data: offices } = await supabase.from('offices').select('name')
+    const officeLocations = (offices || []).map((o: any) => officeNameToLocation(o.name))
+    const locations = Array.from(new Set([...officeLocations, 'Remote'])).sort()
+
+    const canonicalDepartments = new Set<string>(DEPARTMENTS)
+    const canonicalLocations = new Set<string>(locations)
+
+    const flaggedDepartments = Array.from(
+      new Set(
+        rows
+          .map((d: any) => d.department)
+          .filter(
+            (v: unknown): v is string =>
+              typeof v === 'string' && v.length > 0 && !canonicalDepartments.has(v)
+          )
+      )
+    ).sort()
+
+    const flaggedLocations = Array.from(
+      new Set(
+        rows
+          .map((d: any) => d.location)
+          .filter(
+            (v: unknown): v is string =>
+              typeof v === 'string' && v.length > 0 && !canonicalLocations.has(v)
+          )
+      )
+    ).sort()
+
+    return NextResponse.json({
+      devices: devices || [],
+      // `total` is the whole-inventory count (all statuses, all filters
+      // ignored) — used for the "showing X of Y" header. `counts.all` is
+      // scoped to the currently-applied non-status filters, so it agrees
+      // with the "All" chip beneath it.
+      total: rows.length,
+      counts,
+      typeCounts,
+      departments: DEPARTMENTS as readonly string[],
+      locations,
+      flaggedDepartments,
+      flaggedLocations,
+    })
   } catch (error: any) {
     console.error('Error fetching devices:', error)
     return NextResponse.json(
@@ -131,4 +133,79 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = getServiceSupabase()
+    const body = (await request.json()) as Record<string, unknown>
 
+    let insertData: Record<string, unknown>
+    try {
+      insertData = sanitizeDeviceBody(body)
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message }, { status: 400 })
+    }
+
+    if (!insertData.asset_type) {
+      return NextResponse.json({ error: 'Asset type is required' }, { status: 400 })
+    }
+    if (!insertData.status) {
+      insertData.status = 'active'
+    }
+    if (!insertData.device_name) {
+      // device_name stays useful for pickers/search; derive a sensible default
+      insertData.device_name =
+        insertData.asset_tag ||
+        [insertData.manufacturer, insertData.model].filter(Boolean).join(' ') ||
+        insertData.serial_number ||
+        'Unnamed device'
+    }
+
+    const { data: device, error } = await supabase
+      .from('devices')
+      .insert(insertData)
+      .select(`
+        *,
+        employee:employees(id, display_name, email, first_name, last_name)
+      `)
+      .single()
+
+    if (error) {
+      if (error.code === '23505') {
+        return NextResponse.json(
+          { error: 'A device with that asset tag already exists' },
+          { status: 409 }
+        )
+      }
+      throw error
+    }
+
+    if (device.employee_id) {
+      await supabase.from('device_assignments_history').insert({
+        device_id: device.id,
+        employee_id: device.employee_id,
+        assignment_date: new Date().toISOString(),
+        is_current: true,
+      })
+    }
+
+    await logAudit({
+      actor: await currentActor(),
+      action: 'device.create',
+      entity_type: 'device',
+      entity_id: device.id,
+      entity_label: device.device_name || device.asset_tag || device.serial_number,
+      details: {
+        ...insertData,
+        assigned_to: device.employee?.display_name || device.employee?.email || null,
+      },
+    })
+
+    return NextResponse.json({ device }, { status: 201 })
+  } catch (error: any) {
+    console.error('Error creating device:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to create device' },
+      { status: 500 }
+    )
+  }
+}

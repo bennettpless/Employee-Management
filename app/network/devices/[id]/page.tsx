@@ -11,7 +11,6 @@ import {
   Trash2,
   Loader2,
   ExternalLink,
-  Info,
   CheckCircle2,
 } from 'lucide-react'
 import NetworkDeviceForm, {
@@ -237,14 +236,6 @@ export default function NetworkDeviceDetailPage() {
                   </span>
                   <span className="text-xs text-gray-500 inline-flex items-center gap-1 capitalize">
                     Source: <strong>{device.source}</strong>
-                    {device.is_manually_overridden && (
-                      <span
-                        className="text-blue-600"
-                        title="Manual override is on — Auvik sync will skip this device"
-                      >
-                        ● override
-                      </span>
-                    )}
                   </span>
                 </div>
               </div>
@@ -261,18 +252,6 @@ export default function NetworkDeviceDetailPage() {
                   Open
                 </a>
               )}
-              {device.auvik_device_id &&
-                process.env.NEXT_PUBLIC_AUVIK_DEVICE_BASE_URL && (
-                  <a
-                    href={`${process.env.NEXT_PUBLIC_AUVIK_DEVICE_BASE_URL}${device.auvik_device_id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    View in Auvik
-                  </a>
-                )}
               {isAdmin && (
                 <>
                   <button
@@ -298,17 +277,6 @@ export default function NetworkDeviceDetailPage() {
               )}
             </div>
           </div>
-
-          {device.source === 'auvik' && !device.is_manually_overridden && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 flex items-start gap-2">
-              <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <div>
-                Auvik-synced device. Hand-edits will be overwritten by the
-                next sync unless you enable <strong>Manual override</strong>{' '}
-                in Edit mode.
-              </div>
-            </div>
-          )}
 
           {device.source === 'manual' && (
             <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
@@ -366,11 +334,6 @@ export default function NetworkDeviceDetailPage() {
             <Field label="Last Seen">
               {device.last_seen
                 ? new Date(device.last_seen).toLocaleString()
-                : '—'}
-            </Field>
-            <Field label="Last Auvik Sync">
-              {device.last_synced_at
-                ? new Date(device.last_synced_at).toLocaleString()
                 : '—'}
             </Field>
             <Field label="Credentials Vault Ref" wide>
@@ -465,7 +428,6 @@ export default function NetworkDeviceDetailPage() {
           form={form}
           setForm={setForm}
           offices={offices}
-          showAuvikNotice={device.source === 'auvik'}
           saving={saving}
           errorMessage={saveError}
           onSave={handleSave}
