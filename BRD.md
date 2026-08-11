@@ -5,6 +5,13 @@
 **Last Updated:** April 2026  
 **Status:** Active
 
+> ⚠️ **Out of date with the shipped v2 app (Aug 2026).** The software-inventory
+> and license-tracking requirements below were removed from the product; a
+> Network Inventory feature (per-office device inventory, geographic map,
+> topology diagrams, CSV/PNG/PDF exports) replaced them. See
+> [docs/employee-management-system/00-index.md](./docs/employee-management-system/00-index.md)
+> for what actually shipped. This document is pending a business-owner rewrite.
+
 ---
 
 ## 1. Executive Summary

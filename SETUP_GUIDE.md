@@ -83,6 +83,12 @@ If the dev server starts without errors, you're ready to proceed.
    - devices
    - tickets
    - sync_logs
+   - offices
+   - network_devices
+   - network_device_connections
+   - office_connections
+
+(Also apply everything under `supabase/migrations/` — the base `schema.sql` plus migrations together produce the complete schema.)
 
 ## Microsoft Azure / SharePoint Setup
 
@@ -353,38 +359,28 @@ Open http://localhost:3000
 
 ### Step 2: Run Onboarding Sync
 
-1. Navigate to the **Sync** page (http://localhost:3000/sync)
-2. Trigger the **Onboarding** sync (reads the configured onboarding / offboarding workbooks from SharePoint)
-3. Wait for completion and review any skipped / error rows
+1. Navigate to the **Devices** page (http://localhost:3000/devices)
+2. Click **Sync Onboarding/Offboarding** (reads the configured onboarding / offboarding workbooks from SharePoint)
+3. Wait for completion and step through the sync-review modal (asset type / status / department / location for every device the sync changed)
 
 **What this does**:
 - Reads the onboarding workbook via Microsoft Graph (`lib/sharepoint-workbook.ts`)
 - Creates new employee records (including `username` + `extension` when present)
 - Assigns / creates devices for those employees
-- Looks up new machines in NinjaOne when available
+- Looks up machines in NinjaOne when they aren't in inventory; machines found nowhere are parked in `pending_device_lookups` and retried next sync
 
 ### Step 3: Verify Employee and Device Roster
 
 1. Go to **Employees** page — you should see newly onboarded employees
-2. Open an employee to see their assigned devices
-3. Device hardware details are filled when NinjaOne sync runs (manual or scheduled)
+2. Go to **Devices** and filter by assignee to confirm their machines are assigned
 
 **If onboarding sync fails**:
 - Verify Azure App has SharePoint/OneDrive permissions
 - Check workbook env vars (`ONBOARDING_WORKBOOK`, `SHAREPOINT_SITE_PATH`, sheet-name overrides)
 
-### Step 4: NinjaOne (Device Details)
-
-NinjaOne sync populates serial numbers and OS info. You can also trigger it via cron (see README). Devices are matched to NinjaOne by name/serial.
-
-### Step 5: Verify Device Data
-
-1. Go to **Devices** page
-2. Confirm devices show details (serial, OS) where NinjaOne has matched
-3. On an employee profile, check that assigned devices appear
-
-**If devices aren’t linking**:
-- NinjaOne sync matches by device name/serial; see `app/api/sync/ninjaone/route.ts` if you need to adjust logic
+**If devices aren't linking**:
+- The sync matches by device name (e.g. "BPL-5XBKPK4") against inventory, then NinjaOne (`systemName`/`dnsName`); see `app/api/sync/onboarding/route.ts` if you need to adjust logic
+- Verify the machine cell on the onboarding sheet reads like "New BPL-XXXXX" or "Existing ATL-XXXXX"
 
 ### Step 6: Test Filtering and Search
 
@@ -401,7 +397,7 @@ NinjaOne sync populates serial numbers and OS info. You can also trigger it via 
 
 - **Azure resources** (resource group `rg-net-prod-hub`): App Service plan `asp-ems-prod-2` (B1 Linux, Central US, ~$13/mo) + Web App `app-ems-bp-prod` (Node 22, standalone Next.js build, `node server.js`, HTTPS-only, Always-On).
 - **Env vars** live in the Web App's application settings (Azure Portal → Web App → Environment variables). Production has its own `NEXTAUTH_SECRET`; dev-only and retired vars are intentionally absent.
-- **No cron** — all syncs are manual actions on the Sync page (the old nightly NinjaOne sync is retired).
+- **No cron** — the onboarding sync is a manual button on the Devices page (the old nightly NinjaOne sync is retired).
 
 ### Shipping an update
 
@@ -430,7 +426,7 @@ The app is standard Next.js 14 — `npm run build` + `npm start` on any Node 20+
 1. Verify AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID in `.env`
 2. Check Azure App has Sites.Read.All or Files.Read.All (and admin consent)
 3. Confirm `ONBOARDING_WORKBOOK` / `DEVICE_INVENTORY_WORKBOOK` and `SHAREPOINT_SITE_PATH`
-4. Check sync logs on the Sync page for details
+4. Check the `sync_logs` table in Supabase (or `GET /api/sync/logs`) for details
 
 #### "No devices showing for employees"
 
@@ -476,7 +472,7 @@ The app is standard Next.js 14 — `npm run build` + `npm start` on any Node 20+
 If you encounter issues:
 
 1. **Check Logs**:
-   - Sync logs in the Sync page
+   - Sync history: `sync_logs` table in Supabase (or `GET /api/sync/logs`); change history at `/audit`
    - Supabase logs in dashboard
    - Browser console (F12)
    - Production (Azure): `az webapp log tail -g rg-net-prod-hub -n app-ems-bp-prod`, or Azure Portal → the Web App → Log stream

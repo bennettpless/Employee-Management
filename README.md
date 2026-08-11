@@ -1,24 +1,24 @@
-# Employee Management System
+# Employee & Network Inventory System
 
-A comprehensive employee management system that integrates with **SharePoint Excel**, NinjaOne, and Supabase to provide a unified view of employees, devices, tickets, and software licenses.
+A unified **employee, equipment, and network inventory** for Bennett & Pless — who has what device, and how every office is wired together. Integrates with **SharePoint workbooks** (onboarding + device inventory), **NinjaOne** (device lookup), **Supabase** (database), and the **IT Response Agent**.
 
 ## 🌟 Features
 
 ### Core Functionality
-- **Employee Management**: Centralized employee directory synced from **SharePoint Excel** ("BP Employee list and inventory.xlsx")
-- **Advanced Filtering**: Filter employees by status, department, and office location
-- **Device Tracking**: Device roster from Excel; device details (serial, OS, software) from NinjaOne
-- **Ticket Management**: Track support tickets linked to employees
-- **License Management**: Monitor software licenses, usage, and expiration dates (including data from Excel)
-- **Automated Sync**: Sync from Excel (manual or cron); NinjaOne sync runs after Excel or on schedule
+- **Employee Directory**: Active employees created automatically by the onboarding sync (SharePoint onboarding workbook); offboarding closes out assignments
+- **Device Inventory**: Laptops, desktops, monitors, and TVs — assignment history, status, department, and location, with a reviewed sync flow for new machines
+- **Network Inventory**: Switches, access points, firewalls, and servers across all 11 offices — manual entry plus CSV/XLSX import wizard
+- **Geographic Office Map**: Leaflet map with status-colored pins per office
+- **Topology Diagrams**: Per-office React Flow diagrams with drag-to-edit connections, plus an inter-office connectivity map
+- **Exports**: Device-list CSV (company-wide or per office) and topology PNG/PDF
+- **Audit Log**: Every create/update/delete recorded and browsable at `/audit`
+- **IT Response Agent**: Embedded review dashboard with a live pending-review badge
 
 ### Key Capabilities
-- ✅ **SharePoint Excel** sync for employee and device roster (primary data source)
-- ✅ NinjaOne integration for device and software tracking
-- ✅ Multi-dimensional filtering (department, office location, employment status)
-- ✅ Automatic status updates for new hires and terminations
-- ✅ Comprehensive device and software inventory per employee
-- ✅ License seat tracking and expiration monitoring
+- ✅ Onboarding/offboarding sync from the SharePoint workbook with a review modal for every device it changes
+- ✅ NinjaOne lookup for machines named on the onboarding sheet that aren't in inventory yet
+- ✅ Canonical department/location filters with cleanup flags for out-of-list values
+- ✅ Azure AD SSO (NextAuth), domain-restricted, all routes protected
 - ✅ Responsive modern UI with Tailwind CSS
 
 ## 🏗️ Tech Stack
@@ -149,73 +149,73 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 7. Initial Data Sync
 
-1. Navigate to the **Sync** page in the application  
-2. Click **Sync from Excel** to sync employee and device data from the SharePoint file "BP Employee list and inventory.xlsx"  
-3. Wait for completion; NinjaOne sync may run afterward to populate device details  
+1. Navigate to the **Devices** page in the application
+2. Click **Sync Onboarding/Offboarding** — this reads the SharePoint onboarding workbook, creates new employees, and assigns their machines (looking them up in NinjaOne when they aren't in inventory)
+3. Review the changed devices in the sync-review modal (asset type / status / department / location)
 4. Check the **Employees** page to see synced data
 
 ## 📊 Database Schema
 
 ### Tables
 
-- **employees**: Employee data from SharePoint Excel
-- **devices**: Device roster from Excel; details from NinjaOne
-- **device_software**: Software installed on devices
-- **tickets**: Support tickets linked to employees
-- **licenses**: Software licenses
-- **license_assignments**: License assignments to employees
+- **employees**: Employee directory (created by the onboarding sync)
+- **devices**: Asset inventory (laptops, desktops, monitors, TVs) with assignment tracking
+- **tickets**: Support tickets (schema only; UI deferred)
 - **sync_logs**: Synchronization history
+- **offices**: The 11 offices (admin-managed at `/settings/offices`)
+- **network_devices**: Network inventory (switches, APs, firewalls, servers)
+- **network_device_connections**: Links between network devices (topology edges)
+- **office_connections**: Inter-office connectivity (the `/network/inter-office` map)
 
-See `supabase/schema.sql` for complete schema details.
+See `supabase/schema.sql` and `supabase/migrations/` for complete schema details.
 
 ## 🔄 Synchronization
 
-There are **no scheduled syncs** — the old nightly NinjaOne/Intune device syncs are retired (their endpoints return 410 Gone). All syncs are manual, human-triggered actions from the Sync page:
+There are **no scheduled syncs** — the old nightly NinjaOne/Intune device syncs are retired (their endpoints return 410 Gone). All syncs are manual, human-triggered:
 
-- **Onboarding / Offboarding sync** — reads the SharePoint onboarding workbook, creates/offboards employees, and assigns devices (looking up new machines in NinjaOne when they aren't in inventory yet).
-- **Device Inventory import** — imports the SharePoint "Device Inventory" sheet into the devices table.
+- **Onboarding / Offboarding sync** — the **Sync Onboarding/Offboarding** button on the Devices page. Reads the SharePoint onboarding workbook, creates/offboards employees, and assigns devices (looking up new machines in NinjaOne when they aren't in inventory yet). Every device the sync touches is presented in a review modal afterward.
+- **Device Inventory import** (`POST /api/devices/import-inventory`) — one-time seed of the devices table from the SharePoint "Device Inventory" sheet; API-only, no UI button.
 
 ## 📱 Pages Overview
 
 ### Home Dashboard (`/`)
-Overview of all modules with quick access cards
+Overview of all modules with quick access cards and the IT Response Agent pending-review badge
 
 ### Employees (`/employees`)
-- View all employees with advanced filtering
-- Filter by status, department, office location, or search
-- See device count and ticket count per employee
-- Click to view detailed employee profile
-
-### Employee Detail (`/employees/[id]`)
-- Complete employee profile
-- View all assigned devices with software inventory
-- See ticket history
-- Track license assignments
+- Active employees from the onboarding sync, with search and filters
+- Edit details in a modal; offboard closes out device assignments
 
 ### Devices (`/devices`)
-- All devices from NinjaOne
-- See device assignments
-- View device specifications and OS information
+- Full asset inventory with type/status/department/location filters
+- **Sync Onboarding/Offboarding** button + sync-review modal
+- Cleanup banner and ⚠ flags for non-canonical department/location values
 
-### Tickets (`/tickets`)
-- All support tickets
-- Filter by status (open, in progress, resolved, closed)
-- See requester and ticket details
+### Device Detail (`/devices/[id]`)
+- Specs, current assignee, and full assignment history
 
-### Licenses (`/licenses`)
-- Software license inventory
-- Track seat usage
-- Monitor expiration dates
-- View costs and billing frequency
+### Network (`/network`)
+- Geographic Leaflet map of all offices with status-colored pins
+- Aggregate device stats and per-office cards; company-wide CSV export
 
-### Sync (`/sync`)
-- **Sync from Excel**: Pull employee and device roster from the SharePoint Excel file
-- View sync history and status
-- Monitor sync success/failures
+### Office Detail (`/network/offices/[id]`)
+- Per-office device table with filters and sort
+- React Flow topology diagram (drag nodes, draw/delete connections)
+- Export ▾ dropdown: PNG / CSV / PDF
 
-### Settings (`/settings`)
-- Integration status overview
-- Configuration guidance
+### Network Import (`/network/import`)
+- Three-step CSV/XLSX import wizard with column mapping and row-level validation preview
+
+### Inter-Office Map (`/network/inter-office`)
+- Company-wide office connectivity diagram with editable links
+
+### Audit (`/audit`)
+- Browsable log of every create/update/delete with actor and timestamp
+
+### Response Agent (`/response-agent`)
+- Embedded IT Response Agent review dashboard
+
+### Settings (`/settings`, `/settings/offices`)
+- Integration status overview; office CRUD (admin-only)
 
 ## 🔐 Security Considerations
 
@@ -276,13 +276,9 @@ To add new integrations:
 ### Missing Data
 
 **Employees not showing devices**:
-- NinjaOne may need custom field mapping
-- Update `app/api/sync/ninjaone/route.ts` to match your field names
-- Verify employee email matches between systems
-
-**Tickets not linking to employees**:
-- Ensure ticket system provides requester email
-- Update ticket sync logic to match your ticket system's API
+- The onboarding sync matches machines by device name (e.g. "BPL-5XBKPK4") against inventory, then NinjaOne
+- Machines not found anywhere are parked in `pending_device_lookups` and retried on the next sync
+- Verify the machine cell on the onboarding sheet reads like "New BPL-XXXXX" or "Existing ATL-XXXXX"
 
 ## 📞 Support
 
@@ -299,14 +295,12 @@ This project is proprietary software for internal company use.
 ## 🎯 Future Enhancements
 
 Potential features to add:
-- [ ] Role-based access control
+- [ ] Role-based access control beyond the admin/user split
 - [ ] Export employees to CSV/Excel
 - [ ] Advanced reporting and analytics
-- [ ] Email notifications for license expiration
 - [ ] Custom fields per employee
-- [ ] Integration with more ticket systems
+- [ ] Tickets UI (schema exists; see Phase 10)
 - [ ] Mobile app
-- [ ] Audit logs for all changes
 
 ## 📎 Optional: Azure Entra ID
 

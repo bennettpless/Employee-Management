@@ -1,10 +1,16 @@
 # Phase 19: Docs + Polish
 
-## Status: ⬜ Pending
+## Status: ✅ Complete (2026-08-11)
+
+> **Scope note:** This plan was written while Auvik (Phase 17) was still part of
+> the product. Auvik was removed in [Phase 22](./22-auvik-removal.md), so every
+> Auvik-related item below is **moot** — marked ⛔ rather than checked off.
+> Similarly, the Vercel cron references are moot: production runs on Azure App
+> Service ([Phase 20](./20-production-deployment.md)) with no cron at all.
 
 ## Overview
 
-Final phase of the v2 build. Update top-level documentation (`SETUP_GUIDE.md`, `README.md`), refresh home-page hero copy, add Vitest tests for the import parser and Auvik mapper, and mark Phases 12-19 as ✅ in the index.
+Final phase of the v2 build. Update top-level documentation (`SETUP_GUIDE.md`, `README.md`), refresh home-page hero copy, add Vitest tests for the import parser, and mark Phases 12-19 as ✅ in the index.
 
 ## Prerequisites
 - ✅ Phases 12-18 complete (or near-complete — some polish can land in parallel)
@@ -12,68 +18,74 @@ Final phase of the v2 build. Update top-level documentation (`SETUP_GUIDE.md`, `
 ## Planned Changes
 
 ### Top-level docs
-- [ ] `SETUP_GUIDE.md`:
-  - Add a "Network Inventory" section linking to [17-auvik-integration.md](./17-auvik-integration.md) for Auvik setup
-  - Document the new optional env vars: `AUVIK_API_USER`, `AUVIK_API_KEY`, `AUVIK_TENANT_DOMAIN`
-  - Note that `exceljs` is now a runtime dependency again (was removed in Phase 7)
-  - Note the new Vercel cron entry for Auvik
-- [ ] `README.md`:
-  - Update the elevator pitch to "Employee & Network Inventory" (was "Employee Management")
-  - Update the feature list: remove Software / License inventory bullets; add Network device inventory, geographic map, topology diagrams, exports
-  - Update the screenshot/walkthrough section if any references the removed pages
-- [ ] `BRD.md` (if it exists and is owned by the team) — flag for the operator that v2 should be reflected; defer the actual edit if BRD is owned outside engineering
+- [x] `SETUP_GUIDE.md`:
+  - ⛔ Auvik section / env vars — moot (Phase 22)
+  - [x] Note that `exceljs` is a runtime dependency (used by the network import wizard and SharePoint imports)
+  - ⛔ Vercel cron entry — moot (no cron in production; Azure App Service deployment)
+  - [x] Verify-tables list updated to the full 8-table schema; note that `schema.sql` + `migrations/` together produce the complete schema
+  - [x] First Data Sync walkthrough rewritten — the sync button lives on the **Devices** page (the old `/sync` page was deleted); sync-review modal documented
+- [x] `README.md`:
+  - [x] Elevator pitch updated to "Employee & Network Inventory System"
+  - [x] Feature list: Software/License bullets removed; Network inventory, geographic map, topology diagrams, exports, audit log added
+  - [x] Pages Overview rewritten to the actual v2 route map (network pages, import wizard, inter-office map, audit; removed employee-detail/tickets/licenses/sync pages)
+  - [x] Database schema table list updated to the real 8 tables
+  - [x] Troubleshooting updated (device matching via onboarding sync + `pending_device_lookups`; removed tickets item)
+- [x] `BRD.md` — flagged with an out-of-date banner pointing at `00-index.md`; actual rewrite deferred to the business owner (as planned)
 
 ### Home page hero
-- [ ] `app/page.tsx`:
-  - Update the hero subtitle copy (currently mentions "employees, devices, software, and licenses") to reflect the equipment + network focus, e.g.:
-    > Track equipment and network infrastructure across all offices. Manage employees, devices, and per-office network maps in one place.
-  - Refresh the Key Features section: remove the "Software Inventory" and "License Management" cards; add "Network Mapping" and "Multi-Office Inventory" cards with descriptions matching v2
+- [x] `app/page.tsx` — already done in earlier phases; verified:
+  - Hero reads "Unified employee, device, and network inventory across all 11 offices…"
+  - Card grid is Employees / Devices / Network / IT Response Agent / Settings — no Software or License cards remain
 
 ### Tests
-- [ ] `tests/lib/network-import.test.ts`:
-  - Parsing: valid CSV, valid XLSX (using a tiny in-memory workbook fixture)
-  - Validation: required fields, invalid `device_type`, invalid `status`, unknown `office_name`
-  - Column mapping: handles aliases (e.g., `Device Name` → `name`), trims whitespace, lowercases enum values
-- [ ] `tests/lib/auvik-mapper.test.ts`:
-  - Device-type mapping: known types map correctly, unknown types are filtered out (return `null`/skip)
-  - Status mapping: each known status maps; unknown returns `'unknown'`
-  - Override semantics: a row with `is_manually_overridden = true` is left untouched by the upsert function
-- [ ] Run `npm test` and confirm all suites pass; aim for >80% coverage on the new lib files
+- [x] `tests/lib/network-import.test.ts` (23 tests):
+  - Parsing: CSV (quoted commas, escaped quotes, CRLF, BOM strip, whitespace trim, empty-row skip, unsupported extension), XLSX via an in-memory `exceljs` workbook fixture
+  - Validation: required fields, invalid `device_type`, invalid `status` (+ blank → `'unknown'` default), unknown `office_name`, case-insensitive office matching
+  - Column mapping: `autoMapHeaders` aliases (`Device Name` → `name`, `Site` → `office_name`, `IP Address` → `management_ip`, …), arbitrary-header `columnMap` application, enum lowercasing, blank-optional-to-null, `defaultSource`
+- ⛔ `tests/lib/auvik-mapper.test.ts` — moot; `lib/auvik.ts` was deleted in Phase 22
+- [x] `npm test` — suite runs on CI (Node 22). Local Node 20.16 cannot run Vitest 4 (needs ≥ 20.19); CI is the source of truth
 
 ### Index + plan finalization
-- [ ] `00-index.md`:
-  - Mark Phases 12-19 ✅ as each finishes (or all at once at the end of the polish pass)
-  - Update Status: 🟡 → ✅ at the top once everything is shipped
-- [ ] `implementation-plan.md`:
-  - Update the v2 Progress Summary table — increment Done counts and statuses
-- [ ] Tag a release: `git tag v2.0.0` once everything is merged and deployed
+- [x] `00-index.md` — Phases 12-19 all ✅ (12-18 were marked as they shipped; 19 marked in this pass)
+- [x] `implementation-plan.md` — status header ✅, v2 phase statuses updated, Progress Summary rewritten (including follow-on Phases 20-24), stale Next Steps replaced, scope-change note added
+- [x] Tagged `v2.0.0` after the CI deploy went green
 
 ### Performance pass
-- [ ] Lighthouse audit on `/network` (target: LCP < 2.5s, CLS < 0.1)
-- [ ] Verify Leaflet tiles + React Flow lazy-load and don't block initial paint
-- [ ] Verify the office list is paginated or virtualized if the company ever has > 50 offices (not a concern at 11, but a one-line config worth noting)
+- [x] Verified Leaflet (`OfficeMap`), React Flow (`OfficeTopology`), and the inter-office map all load via `next/dynamic` with `ssr: false` and skeleton placeholders — none block initial paint
+- [ ] Lighthouse audit on `/network` — **deferred**: the production site requires Azure AD sign-in, so an unauthenticated Lighthouse run can't reach `/network`. Anecdotally the page is fast (small payload, lazy-loaded map). Run manually via Chrome DevTools → Lighthouse in a signed-in session if numbers are ever needed
+- [x] Office list virtualization: not needed at 11 offices; the `/network` office cards and Leaflet pins are trivially cheap at this scale. Revisit only if the company passes ~50 offices
 
 ## Key Files
 
 ### Edited
 - `SETUP_GUIDE.md`
 - `README.md`
-- `app/page.tsx` (hero copy + key features)
+- `BRD.md` (out-of-date banner only)
 - `00-index.md` (status updates)
-- `implementation-plan.md` (progress summary)
+- `implementation-plan.md` (statuses + progress summary)
 
 ### New
 - `tests/lib/network-import.test.ts`
-- `tests/lib/auvik-mapper.test.ts`
 
 ## Verification Checklist
-- [ ] `npm test` passes with new tests
-- [ ] `npm run build` passes
-- [ ] `README.md` and `SETUP_GUIDE.md` accurately describe the v2 app
-- [ ] Home page copy matches the new equipment + network positioning
-- [ ] All Phase 12-19 step files have status ✅ in `00-index.md`
-- [ ] No remaining TODO/FIXME comments in v2 code
-- [ ] Lighthouse score on `/network` is acceptable (LCP, CLS, TBT)
+- [x] `npm test` passes with new tests (on CI / Node 22)
+- [x] `npm run build` passes
+- [x] `README.md` and `SETUP_GUIDE.md` accurately describe the v2 app
+- [x] Home page copy matches the equipment + network positioning
+- [x] All Phase 12-19 step files have status ✅ in `00-index.md`
+- [x] No remaining TODO/FIXME comments in v2 code (verified via grep)
+- [ ] Lighthouse score on `/network` — deferred (auth-gated; see Performance pass)
 
 ## Implementation Notes
-_Added during/after implementation._
+
+- The biggest doc rot wasn't the planned items — it was references to the
+  deleted `/sync` page. The onboarding sync moved to a button on `/devices`
+  (with the Phase 24 review modal), and both `README.md` and `SETUP_GUIDE.md`
+  still walked users through a page that 404s. Fixed in this pass.
+- `implementation-plan.md` predates every v2 scope change; rather than
+  rewriting its 50+ step tables, a scope-change banner was added pointing to
+  the per-phase docs as the source of truth, and the summary/status sections
+  were corrected.
+- Tests deliberately mock `@/lib/supabase` at import time —
+  `lib/network-import.ts` re-exports `commitRows`, which would otherwise pull
+  the service-role client (and its env-var requirements) into the test run.

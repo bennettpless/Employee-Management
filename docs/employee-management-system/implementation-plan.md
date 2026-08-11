@@ -1,10 +1,17 @@
 # Implementation Plan: Employee & Network Inventory System
 
-## Status: 🚧 v2 In Progress
+## Status: ✅ v2 Shipped — deployed to Azure App Service (2026-08-11)
 
 ## Overview
 
-This Next.js 14 (App Router) application is being repositioned from "employee + software/license inventory" to "equipment + network inventory." v1 (Phases 1-11) shipped a working employee + device tracker with Excel/NinjaOne sync, IT Response Agent embed, and Azure AD SSO. **v2 (Phases 12-19)** removes the unused Software and Licenses features entirely and replaces them with a Network feature that tracks APs, switches, firewalls, and servers across the 11 offices, with a geographic office map (Leaflet), per-office topology diagrams (React Flow), manual entry + CSV/XLSX import, an optional Auvik sync, and full export support (Excel/CSV/JSON + PNG/PDF).
+This Next.js 14 (App Router) application was repositioned from "employee + software/license inventory" to "equipment + network inventory." v1 (Phases 1-11) shipped a working employee + device tracker with Excel/NinjaOne sync, IT Response Agent embed, and Azure AD SSO. **v2 (Phases 12-19, plus follow-on phases 21-24)** removed the unused Software and Licenses features entirely and replaced them with a Network feature that tracks APs, switches, firewalls, and servers across the 11 offices, with a geographic office map (Leaflet), per-office topology diagrams (React Flow), manual entry + CSV/XLSX import, and CSV/PNG/PDF exports.
+
+> **Scope changes since this plan was written** (per-phase docs are the source
+> of truth over the step tables below):
+> - **Auvik (Phase 17) shipped, ran once to seed, then was removed in Phase 22** — the Network feature is manual-entry + import only.
+> - **Exports (Phase 18) trimmed to CSV** (dropped XLSX/JSON serializers and the full-JSON dump).
+> - **The Excel/NinjaOne/Intune device syncs were retired** (phases 23-24) in favor of a SharePoint Device Inventory import + a reviewed onboarding sync. There is no cron in production.
+> - **Phase 20 deployed to Azure App Service** (`app-ems-bp-prod.azurewebsites.net`) with GitHub Actions CI/CD — see [20-production-deployment.md](./20-production-deployment.md).
 
 ## Architecture Decisions
 
@@ -258,7 +265,7 @@ This Next.js 14 (App Router) application is being repositioned from "employee + 
 ## v2 Phase Breakdown (Equipment + Network Inventory pivot)
 
 ### Phase 12: Remove Software + Licenses
-> **Status: ⬜ Pending** — see [12-software-licenses-removal.md](./12-software-licenses-removal.md)
+> **Status: ✅ Complete** — see [12-software-licenses-removal.md](./12-software-licenses-removal.md)
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -273,7 +280,7 @@ This Next.js 14 (App Router) application is being repositioned from "employee + 
 | 12.9 | Update Key Features copy on home page to reflect equipment + network focus | ⬜ Not done |
 
 ### Phase 13: Network Schema + Offices Admin
-> **Status: ⬜ Pending** — see [13-network-schema.md](./13-network-schema.md)
+> **Status: ✅ Complete** — see [13-network-schema.md](./13-network-schema.md)
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -286,7 +293,7 @@ This Next.js 14 (App Router) application is being repositioned from "employee + 
 | 13.7 | Seed the 11 offices once the operator provides the list | ⬜ Not done |
 
 ### Phase 14: Network Inventory (Manual + Import)
-> **Status: ⬜ Pending** — see [14-network-inventory.md](./14-network-inventory.md)
+> **Status: ✅ Complete** — see [14-network-inventory.md](./14-network-inventory.md)
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -300,7 +307,7 @@ This Next.js 14 (App Router) application is being repositioned from "employee + 
 | 14.8 | Add `/api/network/devices/import` route with row-level error reporting | ⬜ Not done |
 
 ### Phase 15: Geographic Office Map
-> **Status: ⬜ Pending** — see [15-network-geo-map.md](./15-network-geo-map.md)
+> **Status: ✅ Complete** — see [15-network-geo-map.md](./15-network-geo-map.md)
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -311,7 +318,7 @@ This Next.js 14 (App Router) application is being repositioned from "employee + 
 | 15.5 | Handle Leaflet's SSR quirks (`next/dynamic` + `ssr: false` for the map component) | ⬜ Not done |
 
 ### Phase 16: Topology Diagrams
-> **Status: ⬜ Pending** — see [16-network-topology.md](./16-network-topology.md)
+> **Status: ✅ Complete** — see [16-network-topology.md](./16-network-topology.md)
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -322,7 +329,7 @@ This Next.js 14 (App Router) application is being repositioned from "employee + 
 | 16.5 | Add PNG and PDF export buttons (use `html-to-image.toPng` + `jsPDF.addImage`) | ⬜ Not done |
 
 ### Phase 17: Auvik Integration (Optional)
-> **Status: ⬜ Pending** — see [17-auvik-integration.md](./17-auvik-integration.md)
+> **Status: ❌ Removed** — shipped, ran once to seed the inventory, then removed in Phase 22. See [17-auvik-integration.md](./17-auvik-integration.md) and [22-auvik-removal.md](./22-auvik-removal.md)
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -336,7 +343,7 @@ This Next.js 14 (App Router) application is being repositioned from "employee + 
 | 17.8 | Document how to obtain Auvik API user/key in the phase doc | ⬜ Not done |
 
 ### Phase 18: Exports
-> **Status: ⬜ Pending** — see [18-network-exports.md](./18-network-exports.md)
+> **Status: ✅ Complete (scope trimmed to CSV + the Phase 16 PNG/PDF)** — see [18-network-exports.md](./18-network-exports.md)
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -347,7 +354,7 @@ This Next.js 14 (App Router) application is being repositioned from "employee + 
 | 18.5 | Topology PNG/PDF export already shipped in Phase 16 — link buttons from the office page | ⬜ Not done |
 
 ### Phase 19: Docs + Polish
-> **Status: ⬜ Pending** — see [19-network-docs-polish.md](./19-network-docs-polish.md)
+> **Status: ✅ Complete** — see [19-network-docs-polish.md](./19-network-docs-polish.md). Auvik-related items became moot with Phase 22
 
 | Step | Description | Status |
 |------|-------------|--------|
@@ -491,23 +498,32 @@ employee-management/
 | 11 | IT Response Agent Integration | — | — | 0 | ✅ Shipped |
 
 ### v2 (Equipment + Network Inventory)
-| Phase | Name | Steps | Done | Remaining | Status |
-|-------|------|-------|------|-----------|--------|
-| 12 | Remove Software + Licenses | 9 | 0 | 9 | ⬜ Pending |
-| 13 | Network Schema + Offices Admin | 7 | 0 | 7 | ⬜ Pending |
-| 14 | Network Inventory (Manual + Import) | 8 | 0 | 8 | ⬜ Pending |
-| 15 | Geographic Office Map | 5 | 0 | 5 | ⬜ Pending |
-| 16 | Topology Diagrams | 5 | 0 | 5 | ⬜ Pending |
-| 17 | Auvik Integration (Optional) | 8 | 0 | 8 | ⬜ Pending |
-| 18 | Exports | 5 | 0 | 5 | ⬜ Pending |
-| 19 | Docs + Polish | 6 | 0 | 6 | ⬜ Pending |
-| | **v2 Totals** | **53** | **0** | **53** | **0% complete** |
+| Phase | Name | Status |
+|-------|------|--------|
+| 12 | Remove Software + Licenses | ✅ Shipped |
+| 13 | Network Schema + Offices Admin | ✅ Shipped |
+| 14 | Network Inventory (Manual + Import) | ✅ Shipped |
+| 15 | Geographic Office Map | ✅ Shipped |
+| 16 | Topology Diagrams | ✅ Shipped |
+| 17 | Auvik Integration (Optional) | ❌ Shipped, then removed (Phase 22) |
+| 18 | Exports (CSV + PNG/PDF) | ✅ Shipped |
+| 19 | Docs + Polish | ✅ Shipped |
+
+### Follow-on phases (see [00-index.md](./00-index.md) for the authoritative list)
+| Phase | Name | Status |
+|-------|------|--------|
+| 20 | Production Deployment (Azure App Service) | ✅ Shipped |
+| 21 | Filter Hardening + Canonical Departments | ✅ Shipped |
+| 22 | Auvik Removal | ✅ Shipped |
+| 23 | Excel Mapper + Dead Column Cleanup | ✅ Shipped |
+| 24 | Sync Review Modal + New Ninja Devices | ✅ Shipped |
 
 ---
 
 ## Next Steps
 
-1. Confirm v2 phase ordering (recommended: 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19; phases 15-18 can ship in any order after 14).
-2. Operator action: provide the list of 11 offices (name, address, optional lat/lng) so Phase 13 can seed `offices`.
-3. Operator action: obtain Auvik API credentials when ready (see Phase 17 doc for steps); v2 ships fully without them.
-4. Begin implementation by reading [12-software-licenses-removal.md](./12-software-licenses-removal.md) and working forward.
+v2 is shipped and live at <https://app-ems-bp-prod.azurewebsites.net>. Remaining known work:
+
+1. Phase 10 (Deferred Features — tickets UI, Entra ID sync) stays parked until there's demand.
+2. Upgrade developer workstations to Node ≥ 20.19 (or 22) so `npm test` runs locally; CI (Node 22) is the current source of truth for the suite.
+3. Consider a custom domain (e.g. `ems.bennett-pless.com`) in front of the App Service when DNS access is available.
