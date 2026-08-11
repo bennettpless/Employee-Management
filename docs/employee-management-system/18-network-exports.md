@@ -1,6 +1,6 @@
 # Phase 18: Exports
 
-## Status: 🟡 In Progress
+## Status: ✅ Complete (verified 2026-08-11, commit 90fad6b)
 
 ## Overview
 
@@ -74,14 +74,29 @@ Trimmed vs. the original plan:
 - `components/network/OfficeTopology.tsx` (expose exports via callback, drop redundant buttons)
 
 ## Verification Checklist
-- [ ] `GET /api/network/devices/export?format=csv` returns a valid CSV that opens in Excel without warnings
-- [ ] `GET /api/network/devices/export?format=csv&officeId=<uuid>` only includes devices for that office
-- [ ] `GET /api/network/devices/export?format=xlsx` returns 400 (unsupported format)
-- [ ] Filenames include the date and office name (or `all-offices`) for easy archiving
-- [ ] `/network` shows a single **Export CSV** button (no dropdown, no PNG/PDF)
-- [ ] `/network/offices/[id]` shows an **Export office ▾** dropdown with all three options; PNG/PDF trigger the topology export; CSV downloads that office's devices
-- [ ] Topology toolbar no longer shows its own PNG/PDF buttons (Auto-layout button remains)
-- [ ] Dropdown is keyboard-accessible (Tab focus, arrow keys navigate items, Enter activates, Escape closes)
+- [x] `GET /api/network/devices/export?format=csv` returns a valid CSV that opens in Excel without warnings (UTF-8 BOM + CRLF line endings)
+- [x] `GET /api/network/devices/export?format=csv&officeId=<uuid>` only includes devices for that office (unknown office → 404)
+- [x] `GET /api/network/devices/export?format=xlsx` returns 400 (unsupported format)
+- [x] Filenames include the date and office name (or `all-offices`) for easy archiving (`network-devices-<slug>-<YYYYMMDD>.csv`)
+- [x] `/network` shows a single **Export CSV** button (no dropdown, no PNG/PDF)
+- [x] `/network/offices/[id]` shows an **Export office ▾** dropdown with all three options; PNG/PDF trigger the topology export; CSV downloads that office's devices
+- [x] Topology toolbar no longer shows its own PNG/PDF buttons (Auto-layout button remains)
+- [x] Dropdown is keyboard-accessible (Tab focus, arrow keys navigate items, Enter/Space activates, Escape closes)
 
 ## Implementation Notes
-_Added during/after implementation._
+
+Shipped as planned; verified 2026-08-11 against the code in commit 90fad6b
+(the commit that also went live on Azure App Service):
+
+- `lib/network-export.ts` — RFC 4180 serializer with the spec'd column order,
+  plus `slugForFilename` / `todayStamp` helpers. Prepends a UTF-8 BOM and uses
+  CRLF so Excel auto-detects encoding on double-click.
+- `app/api/network/devices/export/route.ts` — CSV-only allowlist (400 for
+  anything else), optional `officeId` filter (404 when the office doesn't
+  exist), rows ordered office-then-name so the company-wide file groups
+  naturally.
+- `components/network/ExportMenu.tsx` — headless dropdown; also reused by the
+  Phase-25 inter-office map (`components/temp-topology/InterOfficeMap.tsx`).
+- `OfficeTopology` publishes `exportPng`/`exportPdf` upward via
+  `onExportsReady` (nulled while loading/errored/empty, which drives the
+  disabled tooltips) and `onExportingChange` drives the running spinner.

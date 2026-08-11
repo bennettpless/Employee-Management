@@ -34,9 +34,9 @@
 | 15. Geographic Office Map | [15-network-geo-map.md](./15-network-geo-map.md) | ✅ Complete | 39eac75 |
 | 16. Topology Diagrams | [16-network-topology.md](./16-network-topology.md) | ✅ Complete | 26b1f47 |
 | 17. Auvik Integration (Optional) | [17-auvik-integration.md](./17-auvik-integration.md) | ❌ Removed (see Phase 22) | 13bcee3 |
-| 18. Exports (CSV / PNG / PDF) | [18-network-exports.md](./18-network-exports.md) | 🟡 In Progress | — |
+| 18. Exports (CSV / PNG / PDF) | [18-network-exports.md](./18-network-exports.md) | ✅ Complete | 90fad6b |
 | 19. Docs + Polish | [19-network-docs-polish.md](./19-network-docs-polish.md) | ⬜ Pending | — |
-| 21. Filter Hardening + Canonical Departments | [21-filter-hardening.md](./21-filter-hardening.md) | 🟡 In Progress | — |
+| 21. Filter Hardening + Canonical Departments | [21-filter-hardening.md](./21-filter-hardening.md) | ✅ Complete | 90fad6b |
 | 22. Auvik Removal | [22-auvik-removal.md](./22-auvik-removal.md) | ✅ Complete | — |
 | 23. Excel Mapper + Dead Column Cleanup | [23-excel-cleanup.md](./23-excel-cleanup.md) | ✅ Complete | — |
 | 24. Sync Review Modal + New Ninja Devices | [24-sync-review.md](./24-sync-review.md) | ✅ Complete | — |

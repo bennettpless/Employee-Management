@@ -1,6 +1,6 @@
 # Phase 21: Filter Hardening + Canonical Departments
 
-## Status: 🟡 In Progress
+## Status: ✅ Complete (verified 2026-08-11, commit 90fad6b)
 
 ## Overview
 
@@ -91,28 +91,27 @@ The onboarding sync assigns a device's department from the employee's email + jo
 - `docs/employee-management-system/00-index.md` (add Phase 21 row)
 
 ## Verification Checklist
-- [ ] `departmentFromTitle` returns `Leadership` for "VP of Engineering", "Director of Ops", "Executive Vice President", "President", "Department Manager"
-- [ ] `departmentFromTitle` returns `Engineer` for "Software Engineer", "Design Engineer", "Senior Structural Engineer"
-- [ ] `departmentFromTitle` returns `Designer` for "BIM Designer", "BIM Modeler" (any title containing the BIM word)
-- [ ] `departmentFromTitle` returns `Admin` for "Receptionist", "Accountant", "IT Support", empty string, null
-- [ ] `departmentForEmployee(email, title)` returns `BPL` whenever the email ends with `@bpl-enclosure.com`, regardless of title
-- [ ] `/api/devices` returns `departments: ['Admin', 'BPL', 'Designer', 'Engineer', 'Leadership']` (fixed order)
-- [ ] `/api/devices` returns `flaggedDepartments` listing any current DB values outside that set
-- [ ] `/devices` department + location dropdowns show only canonical values
-- [ ] Devices with non-canonical values show a ⚠ next to the offending cell
-- [ ] Cleanup banner appears when the flagged count > 0; disappears when everything is canonical
-- [ ] New employees onboarded via `/api/sync/onboarding` are getting devices tagged with the correct department per the rules above
+- [x] `departmentFromTitle` returns `Leadership` for "VP of Engineering", "Director of Ops", "Executive Vice President", "President", "Department Manager"
+- [x] `departmentFromTitle` returns `Engineer` for "Software Engineer", "Design Engineer", "Senior Structural Engineer"
+- [x] `departmentFromTitle` returns `Designer` for "BIM Designer", "BIM Modeler" (any title containing the BIM word)
+- [x] `departmentFromTitle` returns `Admin` for "Receptionist", "Accountant", "IT Support", empty string, null
+- [x] `departmentForEmployee(email, title)` returns `BPL` whenever the email ends with `@bpl-enclosure.com`, regardless of title
+- [x] `/api/devices` returns `departments: ['Admin', 'BPL', 'Designer', 'Engineer', 'Leadership']` (fixed order)
+- [x] `/api/devices` returns `flaggedDepartments` listing any current DB values outside that set
+- [x] `/devices` department + location dropdowns show only canonical values
+- [x] Devices with non-canonical values show a ⚠ next to the offending cell
+- [x] Cleanup banner appears when the flagged count > 0; disappears when everything is canonical
+- [x] New employees onboarded via `/api/sync/onboarding` are getting devices tagged with the correct department per the rules above (all four assignment sites call `departmentForEmployee` unconditionally)
 
 ## Implementation Notes
 
-**Tests written but not yet runnable (2026-07):**
-`tests/lib/devices.test.ts` covers every branch of `departmentFromTitle` +
-`departmentForEmployee` (~20 assertions). The suite could not be executed
-because `vitest` 4.1.6 fails to load `vitest.config.ts` on this workstation
-with `Error [ERR_REQUIRE_ESM]: require() of ES Module ...\node_modules\std-env\dist\index.mjs`
-— a Node/std-env ESM/CJS incompatibility that predates this phase. Anyone who
-fixes the vitest runner (upgrade Node past 20.19, or reinstall with a matching
-`std-env`) should re-run `npm test` and paste the green summary in here.
+**Tests now green (2026-08-11):** the "vitest can't load its config" blocker
+noted below was a local-Node issue (vitest 4 needs Node ≥20.19; the
+workstation runs 20.16). The suite — including `tests/lib/devices.test.ts` —
+runs green in the Phase 20 CI pipeline (`.github/workflows/deploy-azure.yml`,
+Node 22) on every push to `main`; it passed on both pipeline runs on
+2026-08-11. Local `npm test` will keep failing until the workstation's Node
+is upgraded past 20.19, but CI is now the source of truth for the suite.
 
 **Existing device rows are untouched:**
 The sync change only affects records the sync actively creates or reassigns
