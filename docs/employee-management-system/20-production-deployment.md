@@ -1,34 +1,68 @@
 # Phase 20: Production Deployment
 
-## Status: ⏸️ On Hold — deployment direction undecided
+## Status: ✅ Complete — deployed to Azure App Service (2026-08-11)
 
-> **⚠️ Decision required before this phase can resume.**
->
-> The deployment direction for EMS is **not yet committed**. We are evaluating
-> whether to host this on a **cloud provider** (Azure App Service, Vercel,
-> Cloudflare, or similar) versus running it **on our own infrastructure**
-> (the self-hosted spare-desktop + Caddy + NinjaOne plan documented below).
->
-> This file currently captures **one option in detail** (the self-hosted plan,
-> because it was the most operator-feasible at the time of writing). It is
-> **not a committed direction** — the steps in §20a–20k below should not be
-> executed until we have explicitly agreed on a hosting model. If we choose
-> a cloud route, this doc gets either rewritten in place or split into
-> `20a-self-hosted.md` / `20b-cloud.md` and the chosen option is implemented.
->
-> Until that decision is made:
-> - The repo's deleted `vercel.json`, the new `scripts/` directory, and the
->   self-hosted-flavored edits to `README.md` / `SETUP_GUIDE.md` /
->   `middleware.ts` / `.env.example` are **scaffolding for the self-hosted
->   option only**, kept in-repo so we don't lose the work if we pick that
->   route.
-> - Phases 12–19 (the v2 Network feature) are **not blocked** by Phase 20 —
->   all v2 work continues against `npm run dev` on a developer machine and
->   ships into whichever hosting model we eventually pick.
-> - The **nightly NinjaOne sync** is currently broken in production (the
->   Vercel cron is gone with `vercel.json`, and no replacement runs yet).
->   This is acceptable because there is no production environment to run
->   it against until Phase 20 lands.
+> **The deployment decision has been made: Azure App Service.** The blocker
+> that originally put this phase on hold (no billable Azure subscription)
+> resolved when the operator confirmed access to **BP Azure subscription 1**
+> with `Web Plan Contributor` + `Website Contributor` on `rg-net-prod-hub`.
+> The self-hosted spare-desktop plan below (§20a–20k) was **never executed**
+> and is preserved as an archived alternative only.
+
+## What shipped (Azure App Service)
+
+- **URL:** <https://app-ems-bp-prod.azurewebsites.net> (HTTPS-only, Always-On)
+- **Resources** (resource group `rg-net-prod-hub`):
+  - App Service plan `asp-ems-prod-2` — B1 Linux, **Central US** (~$13/mo).
+    Central US because eastus had a stuck webspace lock and eastus2 was at
+    its B1 quota limit at deploy time.
+  - Web App `app-ems-bp-prod` — Node 22 LTS (Azure had retired the Node 20
+    image), startup command `node server.js`.
+- **Build:** `output: 'standalone'` in `next.config.js`; the deploy artifact
+  is `.next/standalone` + `.next/static` + `public`. App setting
+  `HOSTNAME=0.0.0.0` is required so the standalone server binds correctly
+  inside the App Service container.
+- **Env vars:** all required vars live in the Web App's application settings.
+  `NEXTAUTH_SECRET` is a production-specific value (not the dev secret);
+  `NEXTAUTH_URL` / `NEXT_PUBLIC_APP_URL` point at the production URL. The
+  dev-only `NEXT_PUBLIC_DISABLE_AUTH` and retired Auvik/`SYNC_CRON_SECRET`
+  vars are intentionally absent.
+- **CI/CD:** `.github/workflows/deploy-azure.yml` — on every push to `main`:
+  `npm ci` → `npm test` → `npm run build` → deploy (publish-profile secret
+  `AZUREAPPSERVICE_PUBLISHPROFILE`) → smoke test. Build-time env vars are
+  GitHub repo secrets. SCM basic-auth publishing was enabled on the Web App
+  to allow publish-profile deploys (an OIDC service principal would need
+  role-assignment rights the operator doesn't have).
+- **Azure AD:** production redirect URI
+  `https://app-ems-bp-prod.azurewebsites.net/api/auth/callback/azure-ad`
+  added to the App Registration (localhost kept for dev).
+- **IT Response Agent:** `PORTAL_ORIGIN` on `app-itticketagent-api-prod`
+  allowlists the production origin (done 2026-08-11) — required for the
+  dashboard badge's cross-origin polling; the `/response-agent` iframe works
+  regardless.
+- **No cron.** The nightly NinjaOne sync this doc originally planned for is
+  retired — `/api/sync/ninjaone` and `/api/sync/intune` return 410 Gone.
+  Devices are a SharePoint-imported asset inventory; the onboarding sync and
+  device-inventory import are manual actions on the Sync page.
+- **Verified:** SSO login round-trip confirmed by two users; pipeline run
+  green end-to-end (tests, build, deploy, smoke test).
+
+### Operations quick reference
+
+- **Deploy an update:** commit to `main`, push. ~3 minutes to live.
+- **Logs:** `az webapp log tail -g rg-net-prod-hub -n app-ems-bp-prod`, or
+  Portal → the Web App → Log stream.
+- **Change an env var:** Portal → Web App → Environment variables (or
+  `az webapp config appsettings set`), then the app restarts automatically.
+- **Rollback:** revert the commit on `main` and push; the pipeline redeploys.
+
+---
+
+# Archived: self-hosted plan (never executed)
+
+Everything below is the original self-hosted spare-desktop plan, kept for
+reference in case a LAN-only deployment is ever wanted. **Do not execute** —
+production is Azure App Service (above).
 
 ## Overview (self-hosted option, kept for reference)
 

@@ -29,7 +29,7 @@ A comprehensive employee management system that integrates with **SharePoint Exc
 - **Integrations**: 
   - Microsoft Graph API (Azure Entra ID + SharePoint/Excel)
   - NinjaOne API
-- **Deployment**: TBD — production deployment direction (cloud vs. self-hosted) is on hold pending the Phase 20 decision. The most-developed option in the repo today is self-hosted on a Windows desktop with Caddy + NinjaOne-pushed cert. See [`docs/employee-management-system/20-production-deployment.md`](docs/employee-management-system/20-production-deployment.md) for status.
+- **Deployment**: Azure App Service (Linux, Node 22) at [app-ems-bp-prod.azurewebsites.net](https://app-ems-bp-prod.azurewebsites.net), deployed automatically from `main` via GitHub Actions. See [`docs/employee-management-system/20-production-deployment.md`](docs/employee-management-system/20-production-deployment.md) for details.
 
 ## 📋 Requirements
 
@@ -135,13 +135,9 @@ NINJA_REGION=us
 
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-SYNC_CRON_SECRET=your-random-secret-for-cron-jobs
 ```
 
-**Generate a secure secret** for `SYNC_CRON_SECRET`:
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+See [`.env.example`](.env.example) for the full annotated list of variables.
 
 ### 6. Run Development Server
 
@@ -172,20 +168,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 See `supabase/schema.sql` for complete schema details.
 
-## 🔄 Automated Synchronization
+## 🔄 Synchronization
 
-### Production: Windows Task Scheduler on the self-hosted desktop
+There are **no scheduled syncs** — the old nightly NinjaOne/Intune device syncs are retired (their endpoints return 410 Gone). All syncs are manual, human-triggered actions from the Sync page:
 
-In the current self-hosted deployment, a daily Windows Task Scheduler job at 03:00 on the production desktop runs `scripts\cron\nightly-ninja-sync.ps1`, which POSTs to `https://localhost/api/sync/ninjaone` with `Authorization: Bearer ${SYNC_CRON_SECRET}`. See [`scripts/cron/install-task.ps1`](scripts/cron/install-task.ps1) for the one-time registration command, and Phase 20 doc §20h for context.
-
-### Other platforms
-
-If deploying elsewhere, set up a daily cron that POSTs to `/api/sync/ninjaone` with the `SYNC_CRON_SECRET` bearer token:
-
-```bash
-0 3 * * * curl -X POST https://your-domain.com/api/sync/ninjaone \
-  -H "Authorization: Bearer YOUR_SYNC_CRON_SECRET"
-```
+- **Onboarding / Offboarding sync** — reads the SharePoint onboarding workbook, creates/offboards employees, and assigns devices (looking up new machines in NinjaOne when they aren't in inventory yet).
+- **Device Inventory import** — imports the SharePoint "Device Inventory" sheet into the devices table.
 
 ## 📱 Pages Overview
 
@@ -239,17 +227,13 @@ Overview of all modules with quick access cards
 
 ## 🚀 Deployment
 
-> ⚠️ **Status: Phase 20 deployment direction is on hold.** The team has not yet committed to cloud (Azure App Service / Vercel / Cloudflare) vs. self-hosted (the runbook below). The runbook is preserved for if/when the self-hosted option is chosen — see [`docs/employee-management-system/20-production-deployment.md`](docs/employee-management-system/20-production-deployment.md) for the open decision.
+Production runs on **Azure App Service**: [app-ems-bp-prod.azurewebsites.net](https://app-ems-bp-prod.azurewebsites.net) (B1 Linux plan `asp-ems-prod-2`, Web App `app-ems-bp-prod`, resource group `rg-net-prod-hub`).
 
-The most-developed option is **self-hosted** on a spare Windows desktop on the Bennett & Pless office LAN, fronted by Caddy at `https://ems.local`. The full step-by-step runbook (desktop prep, Caddy + NSSM service registration, NinjaOne push policies for the root CA + hosts entry, Azure AD redirect URI update, nightly Task Scheduler cron) is in:
+**To ship an update, push to `main`.** The GitHub Actions workflow [`.github/workflows/deploy-azure.yml`](.github/workflows/deploy-azure.yml) installs, tests, builds (Next.js standalone output), deploys, and smoke-tests — live in ~3 minutes.
+
+Environment variables live in the Web App's application settings (Azure Portal → the Web App → Environment variables). Full deployment details, operations quick reference, and the archived self-hosted alternative are in:
 
 **[docs/employee-management-system/20-production-deployment.md](docs/employee-management-system/20-production-deployment.md)**
-
-Supporting scripts live under [`scripts/`](scripts/):
-
-- [`scripts/deploy-desktop/`](scripts/deploy-desktop/) — runs on the spare desktop during initial setup
-- [`scripts/ninja-policies/`](scripts/ninja-policies/) — pushed via NinjaOne to all employee machines (cert + hosts entry)
-- [`scripts/cron/`](scripts/cron/) — Windows Task Scheduler job for the nightly NinjaOne sync
 
 ## 🛠️ Customization
 
@@ -271,7 +255,7 @@ To add new integrations:
 
 1. Create integration client in `lib/`
 2. Create sync API route in `app/api/sync/[integration]/route.ts`
-3. Add a daily cron either by extending `scripts/cron/nightly-ninja-sync.ps1` or by registering a separate Task Scheduler job (see `scripts/cron/install-task.ps1` as a template)
+3. If the integration needs a schedule, add a GitHub Actions scheduled workflow that POSTs to the endpoint (the production URL is publicly reachable)
 4. Update sync page UI
 
 ## 🐛 Troubleshooting

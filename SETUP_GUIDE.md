@@ -310,7 +310,7 @@ The IT Response Agent server requires an `X-API-Key` header on every request. Th
 
 ### Step 3: Add the env vars to EMS
 
-Add both vars to `.env.local` (and to the production `.env.local` on the self-hosted desktop — see Phase 20 doc Appendix A):
+Add both vars to `.env.local` (and to the production Web App's application settings in Azure — already done for `app-ems-bp-prod`):
 
 ```bash
 IT_RESPONSE_AGENT_URL=https://app-itticketagent-api-prod.azurewebsites.net
@@ -326,16 +326,10 @@ This is a one-time change on the **IT Response Agent** deployment (not EMS). The
 On the agent server (Azure App Service > Configuration > Application settings), set:
 
 ```
-PORTAL_ORIGIN=https://ems.local
+PORTAL_ORIGIN=https://app-ems-bp-prod.azurewebsites.net,http://localhost:3000
 ```
 
-For local development as well, include both (comma-separated):
-
-```
-PORTAL_ORIGIN=https://ems.local,http://localhost:3000
-```
-
-Restart the agent after changing this. (See Phase 20 doc Appendix D for the exact message to send Bennett if he's the one who manages the agent deployment.)
+Restart the agent after changing this. **This is already done for the current production deployment** (2026-08-11) — it only needs touching again if the EMS origin changes.
 
 ### Step 5: Verify
 
@@ -401,38 +395,25 @@ NinjaOne sync populates serial numbers and OS info. You can also trigger it via 
 
 ## Production Deployment
 
-> ⚠️ **Status: Phase 20 deployment direction is on hold.** No production deployment has been committed to yet — the team is still deciding between cloud (Azure App Service / Vercel / Cloudflare) and self-hosted. See **[`docs/employee-management-system/20-production-deployment.md`](./docs/employee-management-system/20-production-deployment.md)** for the open decision and the most-developed option (self-hosted) below.
+> ✅ **Deployed: Azure App Service.** Production is live at **<https://app-ems-bp-prod.azurewebsites.net>** (deployed 2026-08-11). Full details, operations quick reference, and the archived self-hosted alternative are in **[`docs/employee-management-system/20-production-deployment.md`](./docs/employee-management-system/20-production-deployment.md)**.
 
-The production deployment plan + step-by-step runbook lives in **[`docs/employee-management-system/20-production-deployment.md`](./docs/employee-management-system/20-production-deployment.md)**. Read that doc for the full picture; this section is a quick summary of the most-developed option and the alternatives still under consideration.
+### How it runs
 
-### Most-developed option: Self-hosted on a spare Windows desktop
+- **Azure resources** (resource group `rg-net-prod-hub`): App Service plan `asp-ems-prod-2` (B1 Linux, Central US, ~$13/mo) + Web App `app-ems-bp-prod` (Node 22, standalone Next.js build, `node server.js`, HTTPS-only, Always-On).
+- **Env vars** live in the Web App's application settings (Azure Portal → Web App → Environment variables). Production has its own `NEXTAUTH_SECRET`; dev-only and retired vars are intentionally absent.
+- **No cron** — all syncs are manual actions on the Sync page (the old nightly NinjaOne sync is retired).
 
-EMS runs on a spare desktop on the Bennett & Pless office LAN, fronted by **Caddy** for HTTPS at `https://ems.local`. The Caddy root CA and a `hosts` file entry are pushed to all employee machines via **NinjaOne**, so users see a real green-padlock HTTPS site with no per-machine setup.
+### Shipping an update
 
-- **Cost:** $0/month
-- **URL:** `https://ems.local` (LAN-internal; users must be on the office network or VPN)
-- **Cron:** Windows Task Scheduler on the desktop hits `/api/sync/ninjaone` nightly with `SYNC_CRON_SECRET`
-- **Helper scripts:** [`scripts/deploy-desktop/`](./scripts/deploy-desktop/), [`scripts/ninja-policies/`](./scripts/ninja-policies/), [`scripts/cron/`](./scripts/cron/)
-- **Runbook:** Phase 20 doc §20a–20j
+Push to `main`. The GitHub Actions workflow [`.github/workflows/deploy-azure.yml`](./.github/workflows/deploy-azure.yml) runs install → tests → build → deploy → smoke test, and the site is live in ~3 minutes. Build-time env vars are GitHub repo secrets; the deploy credential is the `AZUREAPPSERVICE_PUBLISHPROFILE` secret.
 
-After the desktop is live, send the **PORTAL_ORIGIN** update message in Phase 20 Appendix D to Bennett (the IT Response Agent owner) so he can allowlist `https://ems.local` on the agent server. Until that's done, the Response Agent iframe + dashboard badge will fail with a CORS error.
+### Deploying somewhere else later
 
-### Why not Vercel / Azure / Cloudflare?
+The app is standard Next.js 14 — `npm run build` + `npm start` on any Node 20+ host works. You'll need to:
 
-These were all evaluated and rejected for the current deployment:
-
-- **Vercel** — Hobby tier explicitly prohibits commercial use; Pro is ~$20/user/month.
-- **Azure App Service** — requires a paid B1 tier (~$13/mo) for production-quality uptime; the F1 Free tier has a 60-CPU-minutes/day cap and no Always-On. Operator does not currently have a billable Azure subscription available.
-- **Cloudflare Tunnel + a real public subdomain** — would be ideal (real cert, no per-user setup) but requires DNS access to `bennett-pless.com` or `ben-net.tech` that the operator does not currently have. Tracked as **Phase 20.1 (Future)** in the Phase 20 doc.
-
-### Alternative platforms (not currently used)
-
-If you need to deploy elsewhere later, the app is standard Next.js 14 — `npm run build` followed by `npm start` on any Node 20 host works. You'll need to:
-
-1. Set all 14 required environment variables (see [`.env.example`](./.env.example) and the Phase 20 doc Appendix A for the exact list)
-2. Run a cron that POSTs to `/api/sync/ninjaone` daily with `Authorization: Bearer ${SYNC_CRON_SECRET}`
-3. Add the new origin to the Azure AD App Registration redirect URIs: `<your-origin>/api/auth/callback/azure-ad`
-4. Update `PORTAL_ORIGIN` on the IT Response Agent server to include the new origin
+1. Set all required environment variables (see [`.env.example`](./.env.example))
+2. Add the new origin to the Azure AD App Registration redirect URIs: `<your-origin>/api/auth/callback/azure-ad`
+3. Update `PORTAL_ORIGIN` on the IT Response Agent server to include the new origin
 
 ## Troubleshooting
 
@@ -498,7 +479,7 @@ If you encounter issues:
    - Sync logs in the Sync page
    - Supabase logs in dashboard
    - Browser console (F12)
-   - Self-hosted prod desktop: `C:\apps\ems\logs\app.err.log`, `C:\apps\ems\logs\nightly-sync.log`, and `C:\caddy\caddy.err.log`
+   - Production (Azure): `az webapp log tail -g rg-net-prod-hub -n app-ems-bp-prod`, or Azure Portal → the Web App → Log stream
 
 2. **Verify Configuration**:
    - Double-check all credentials

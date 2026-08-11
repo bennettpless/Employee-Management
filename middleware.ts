@@ -20,8 +20,9 @@ export const config = {
      * Protect all routes EXCEPT:
      * - /login (sign-in page)
      * - /api/auth/* (NextAuth endpoints)
-     * - /api/sync/ninjaone (Windows Task Scheduler cron on the prod desktop, uses SYNC_CRON_SECRET)
-     * - /api/sync/intune (manual-trigger only today; same SYNC_CRON_SECRET if a cron is ever added)
+     * - /api/sync/ninjaone (retired endpoint, returns 410 Gone — excluded so old
+     *   callers get the 410 instead of a login redirect)
+     * - /api/sync/intune (retired endpoint, returns 410 Gone — same reason)
      * - /_next/* (static assets)
      * - /favicon.ico
      */
