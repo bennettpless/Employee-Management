@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
-import { officeNameToLocation } from '@/lib/devices'
+import { officeNameToLocation, DEPARTMENTS } from '@/lib/devices'
 import type { EmployeeEditValues } from './EmployeeFormModal'
 
 interface FormState {
@@ -220,13 +220,19 @@ export default function EmployeeCreateModal({
           </div>
           <div>
             <label className={labelClass}>Department</label>
-            <input
-              type="text"
+            <select
               value={form.department}
               onChange={setField('department')}
               className={inputClass}
               disabled={saving}
-            />
+            >
+              <option value="">— None —</option>
+              {DEPARTMENTS.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={labelClass}>Office / Location</label>

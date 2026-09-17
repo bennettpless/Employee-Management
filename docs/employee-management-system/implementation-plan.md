@@ -12,6 +12,7 @@ This Next.js 14 (App Router) application was repositioned from "employee + softw
 > - **Exports (Phase 18) trimmed to CSV** (dropped XLSX/JSON serializers and the full-JSON dump).
 > - **The Excel/NinjaOne/Intune device syncs were retired** (phases 23-24) in favor of a SharePoint Device Inventory import + a reviewed onboarding sync. There is no cron in production.
 > - **Phase 20 deployed to Azure App Service** (`app-ems-bp-prod.azurewebsites.net`) with GitHub Actions CI/CD — see [20-production-deployment.md](./20-production-deployment.md).
+> - **IT Response Agent embed (Phase 11) was removed in Phase 27.**
 
 ## Architecture Decisions
 
@@ -250,15 +251,15 @@ This Next.js 14 (App Router) application was repositioned from "employee + softw
 
 | Step | Description | Status |
 |------|-------------|--------|
-| 10.1 | Tickets page — surface `tickets` table in UI with list/detail views | ✅ Superseded — IT Response Agent (Phase 11) |
-| 10.2 | Tickets API — CRUD endpoints for ticket data | ✅ Superseded — IT Response Agent (Phase 11) |
-| 10.3 | Ticket sync — wire NinjaOne `getTickets` to populate `tickets` table | ✅ Superseded — IT Response Agent (Phase 11) |
+| 10.1 | Tickets page — surface `tickets` table in UI with list/detail views | ❌ Agent embed removed — Phase 27; device history is Phase 26 |
+| 10.2 | Tickets API — CRUD endpoints for ticket data | ❌ Agent embed removed — Phase 27 |
+| 10.3 | Ticket sync — wire NinjaOne `getTickets` to populate `tickets` table | ❌ Agent embed removed — Phase 27; Phase 26 uses NinjaOne → `device_history` |
 | 10.4 | Azure Entra ID sync — alternative/supplementary employee source | ❌ Dropped — onboarding workbook sync is the employee source |
 | 10.5 | CI/CD pipeline — GitHub Actions for lint, test, build, deploy | ✅ Shipped — Phase 20 (`deploy-azure.yml`) |
 | 10.6 | Docker containerization for self-hosted deployment | ❌ Dropped — Azure App Service deployment (Phase 20) |
 
 ### Phase 11: IT Response Agent Integration
-> **Status: ✅ Complete** — see [11-it-response-agent.md](./11-it-response-agent.md)
+> **Status: ❌ Removed in Phase 27** — see [11-it-response-agent.md](./11-it-response-agent.md) and [27-response-agent-removal.md](./27-response-agent-removal.md)
 
 ---
 
@@ -495,7 +496,7 @@ employee-management/
 | 8 | Testing | 6 | 6 | 0 | ✅ Shipped |
 | 9 | Authentication & Authorization | 5 | 5 | 0 | ✅ Shipped |
 | 10 | Deferred Features | 6 | 6 | 0 | ✅ Closed (shipped elsewhere or dropped) |
-| 11 | IT Response Agent Integration | — | — | 0 | ✅ Shipped |
+| 11 | IT Response Agent Integration | — | — | 0 | ❌ Shipped, then removed (Phase 27) |
 
 ### v2 (Equipment + Network Inventory)
 | Phase | Name | Status |
@@ -517,6 +518,10 @@ employee-management/
 | 22 | Auvik Removal | ✅ Shipped |
 | 23 | Excel Mapper + Dead Column Cleanup | ✅ Shipped |
 | 24 | Sync Review Modal + New Ninja Devices | ✅ Shipped |
+| 25 | Loaner flag + Ninja helpers + Network lock | ✅ Shipped |
+| 26 | Ninja Ticket → Device Repair History | ⬜ Pending |
+| 27 | IT Response Agent Removal | ✅ Shipped |
+| 28 | Accounting stock tracker | ✅ Shipped |
 
 ---
 
@@ -526,3 +531,4 @@ v2 is shipped and live at <https://app-ems-bp-prod.azurewebsites.net>, and Phase
 
 1. Upgrade developer workstations to Node ≥ 20.19 (or 22) so `npm test` runs locally; CI (Node 22) is the current source of truth for the suite.
 2. Consider a custom domain (e.g. `ems.bennett-pless.com`) in front of the App Service when DNS access is available.
+3. **Phase 26** — auto-log Ninja hardware tickets into device repair history. Parked; see [26-ninja-ticket-repair-history.md](./26-ninja-ticket-repair-history.md). Do not start until higher-priority work is done.

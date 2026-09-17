@@ -3,16 +3,29 @@
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Server, Network, Settings, LogOut, Menu, X, Bot, ScrollText, Users } from 'lucide-react'
+import {
+  Server,
+  Network,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  ScrollText,
+  Users,
+  Package,
+  FileSpreadsheet,
+} from 'lucide-react'
 import { useState } from 'react'
+import { canAccessNetwork } from '@/lib/network-access'
 
-const navItems = [
+const itNavItems = [
   { href: '/', label: 'Home', icon: null },
   { href: '/employees', label: 'Employees', icon: Users },
   { href: '/devices', label: 'Devices', icon: Server },
+  { href: '/stock', label: 'Stock', icon: Package },
+  { href: '/stock/reports', label: 'Reports', icon: FileSpreadsheet },
   { href: '/network', label: 'Network', icon: Network },
   { href: '/audit', label: 'Audit', icon: ScrollText },
-  { href: '/response-agent', label: 'Response Agent', icon: Bot },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -23,8 +36,15 @@ export default function AppHeader() {
 
   if (!session) return null
 
-  const isActive = (href: string) =>
-    href === '/' ? pathname === '/' : pathname.startsWith(href)
+  const visibleNav = itNavItems.filter(
+    (item) => item.href !== '/network' || canAccessNetwork(session.user?.email)
+  )
+
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/'
+    if (href === '/stock') return pathname === '/stock'
+    return pathname.startsWith(href)
+  }
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -32,7 +52,7 @@ export default function AppHeader() {
         <div className="flex items-center justify-between h-14">
           {/* Left: Nav */}
           <nav className="hidden md:flex items-center gap-1">
-            {navItems.map(({ href, label, icon: Icon }) => (
+            {visibleNav.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
@@ -81,7 +101,7 @@ export default function AppHeader() {
       {/* Mobile nav */}
       {mobileOpen && (
         <nav className="md:hidden border-t border-gray-100 bg-white pb-3">
-          {navItems.map(({ href, label, icon: Icon }) => (
+          {visibleNav.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}

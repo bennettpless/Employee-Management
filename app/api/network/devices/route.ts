@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
-import { isAdminRequest } from '@/lib/admin'
+import { requireNetworkOwner } from '@/lib/network-owner'
 import {
   VALID_DEVICE_TYPES,
   VALID_STATUSES,
@@ -99,6 +99,8 @@ function validateDevicePayload(
 
 export async function GET(request: NextRequest) {
   try {
+    const denied = await requireNetworkOwner()
+    if (denied) return denied
     const supabase = getServiceSupabase()
     const params = new URL(request.url).searchParams
 
@@ -140,12 +142,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAdminRequest())) {
-      return NextResponse.json(
-        { error: 'Admin role required' },
-        { status: 403 }
-      )
-    }
+    const denied = await requireNetworkOwner()
+    if (denied) return denied
 
     const body = (await request.json()) as Record<string, unknown>
     const insertData = sanitizeDeviceBody(body)

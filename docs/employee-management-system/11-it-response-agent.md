@@ -1,6 +1,14 @@
 # Phase 11: IT Response Agent Integration
 
-## Status: ✅ Complete
+## Status: ❌ REMOVED IN PHASE 27
+
+> **This phase shipped and was later removed.** The IT Response Agent was
+> embedded as an iframe at `/response-agent` plus a home-page badge. The
+> operator elected to drop that embed from EMS. All agent UI, env vars, and
+> CI secrets were ripped out in [Phase 27](./27-response-agent-removal.md).
+> This document is preserved for historical context — do not act on it.
+> Device hardware-ticket history (when built) is [Phase 26](./26-ninja-ticket-repair-history.md)
+> and talks to NinjaOne directly.
 
 ## Overview
 Integrate the [IT Response Agent](https://github.com/bennettpless/IT-Response-Agent) into the Employee Management app as a dedicated section. The IT Response Agent is a standalone Express.js API server that syncs tickets from NinjaOne, generates AI-recommended responses using OpenAI, and provides an admin review dashboard for accepting, editing, rejecting, and forwarding those responses.

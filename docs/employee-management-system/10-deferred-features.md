@@ -7,8 +7,8 @@ Features that were referenced in the schema, BRD, or README but explicitly defer
 
 ## Resolution
 
-### Ticketing — ✅ Replaced by Phase 11 (IT Response Agent)
-Ticketing functionality is covered by the IT Response Agent integration (Phase 11). The agent syncs tickets from NinjaOne, generates AI recommendations, and provides a full review/forward workflow at `/response-agent`. The `tickets` table in `schema.sql` is retained.
+### Ticketing — ❌ Agent embed removed (Phase 27); device history is Phase 26
+Phase 10 closed ticketing as “covered by the IT Response Agent” (Phase 11 iframe at `/response-agent`). That embed was removed in [Phase 27](./27-response-agent-removal.md). Device hardware-issue history, when built, is [Phase 26](./26-ninja-ticket-repair-history.md) (NinjaOne API → `device_history`). The unused `tickets` table in `schema.sql` is still retained.
 
 ### Azure Entra ID Sync — ❌ Dropped
 Never built, and its rationale is gone: it was conceived as an alternative to the Excel roster, but employees now come from the onboarding workbook sync (with the Phase 24 review flow). The `azure-graph.ts` Graph client still exists (used for SharePoint workbook access), so an Entra sync could be revived if a class of employees ever bypasses onboarding — but none does today.
@@ -26,7 +26,7 @@ Superseded by the Phase 20 Azure App Service deployment (standalone Next.js buil
 - **Audit log** — ✅ Shipped. `/audit` lists every create/update/delete with actor and timestamp.
 
 ## Open Questions
-- [x] Is ticketing still a desired feature, or should the `tickets` table be removed? — **Resolved: tickets table retained; ticketing replaced by IT Response Agent (Phase 11)**
+- [x] Is ticketing still a desired feature, or should the `tickets` table be removed? — **Resolved: table retained unused.** Phase 11 agent embed removed in Phase 27; Phase 26 (pending) writes `device_history`.
 - [x] Is Entra ID sync still planned, or is Excel sufficient long-term? — **Resolved: dropped (2026-08-11); onboarding workbook sync is the employee source**
 - [x] Should CI/CD be prioritized before other deferred features? — **Resolved: shipped with the Phase 20 Azure deployment**
 

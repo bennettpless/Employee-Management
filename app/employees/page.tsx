@@ -77,8 +77,9 @@ export default function EmployeesPage() {
               </h1>
               <p className="text-gray-600 max-w-2xl">
                 Active employees from onboarding sync. New hires are added here
-                automatically; use Edit to fix name or email typos. Offboarding
-                sync removes departed employees from this list. Use Add
+                automatically; use Edit to fix name or email typos. Offboard
+                removes a person from this program entirely and returns their
+                devices to stock. Sync also removes departed employees. Use Add
                 Employee for exceptions the sync missed, such as merger
                 additions.
               </p>

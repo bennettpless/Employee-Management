@@ -36,10 +36,8 @@
 - **Azure AD:** production redirect URI
   `https://app-ems-bp-prod.azurewebsites.net/api/auth/callback/azure-ad`
   added to the App Registration (localhost kept for dev).
-- **IT Response Agent:** `PORTAL_ORIGIN` on `app-itticketagent-api-prod`
-  allowlists the production origin (done 2026-08-11) — required for the
-  dashboard badge's cross-origin polling; the `/response-agent` iframe works
-  regardless.
+- **IT Response Agent embed:** removed in [Phase 27](./27-response-agent-removal.md).
+  `PORTAL_ORIGIN` on the agent App Service is no longer required for EMS.
 - **No cron.** The nightly NinjaOne sync this doc originally planned for is
   retired — `/api/sync/ninjaone` and `/api/sync/intune` return 410 Gone.
   Devices are a SharePoint-imported asset inventory; the onboarding sync and

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
 import { currentActor, logAudit } from '@/lib/audit'
-import { closeCurrentAssignments } from '@/lib/devices'
+import { removeEmployeeFromProgram } from '@/lib/offboard'
+import { officeNameToLocation } from '@/lib/devices'
 
 export async function GET(
   request: NextRequest,
@@ -111,7 +112,9 @@ export async function PUT(
     
     const { data: currentEmployee, error: fetchError } = await supabase
       .from('employees')
-      .select('email, entra_id, first_name, last_name, display_name')
+      .select(
+        'email, entra_id, first_name, last_name, display_name, job_title, department, office_location, phone_number, extension, username, azure_job_title_acked, azure_office_acked, azure_department_acked'
+      )
       .eq('id', params.id)
       .single()
     
@@ -122,6 +125,12 @@ export async function PUT(
       )
     }
     
+    const emptyToNull = (value: unknown): string | null => {
+      if (value == null) return null
+      const s = String(value).trim()
+      return s.length > 0 ? s : null
+    }
+
     const updateData: Record<string, any> = {}
     const allowedFields = [
       'email', 'first_name', 'last_name', 'display_name', 'job_title', 'department',
@@ -130,8 +139,11 @@ export async function PUT(
     
     for (const field of allowedFields) {
       if (field in body) {
-        updateData[field] = body[field] || null
+        updateData[field] = emptyToNull(body[field])
       }
+    }
+    if ('office_location' in updateData && updateData.office_location) {
+      updateData.office_location = officeNameToLocation(String(updateData.office_location))
     }
     
     const firstNameChanged = 'first_name' in body && body.first_name !== currentEmployee.first_name
@@ -147,12 +159,69 @@ export async function PUT(
       updateData.entra_id = updateData.email
     }
     
-    const { data: updatedEmployee, error: updateError } = await supabase
+    const changes: Record<string, { from: unknown; to: unknown }> = {}
+    for (const [field, value] of Object.entries(updateData)) {
+      const from = emptyToNull((currentEmployee as any)[field])
+      const to = emptyToNull(value)
+      if (from !== to) {
+        changes[field] = { from, to }
+      }
+    }
+
+    const ack = body?.azure_ack && typeof body.azure_ack === 'object' ? body.azure_ack : null
+    if (ack) {
+      const ackFields: Record<string, string | null> = {
+        azure_job_title_acked: emptyToNull(ack.job_title),
+        azure_office_acked: emptyToNull(ack.office_location),
+        azure_department_acked: emptyToNull(ack.department),
+      }
+      if (ackFields.azure_office_acked) {
+        ackFields.azure_office_acked = officeNameToLocation(ackFields.azure_office_acked)
+      }
+      for (const [field, value] of Object.entries(ackFields)) {
+        if (emptyToNull((currentEmployee as any)[field]) !== value) {
+          updateData[field] = value
+        }
+      }
+    }
+
+    const ackOnlyFields = new Set([
+      'azure_job_title_acked',
+      'azure_office_acked',
+      'azure_department_acked',
+    ])
+    const hasProfileChanges = Object.keys(changes).length > 0
+    const hasAckChanges = Object.keys(updateData).some((field) => ackOnlyFields.has(field))
+    if (!hasProfileChanges && !hasAckChanges) {
+      return NextResponse.json({ employee: currentEmployee })
+    }
+    if (!hasProfileChanges) {
+      for (const field of Object.keys(updateData)) {
+        if (!ackOnlyFields.has(field)) delete updateData[field]
+      }
+    }
+
+    let { data: updatedEmployee, error: updateError } = await supabase
       .from('employees')
       .update(updateData)
       .eq('id', params.id)
       .select()
       .single()
+
+    if (updateError && /azure_.*_acked/.test(updateError.message || '')) {
+      for (const field of ackOnlyFields) delete updateData[field]
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json({ employee: currentEmployee })
+      }
+      const retry = await supabase
+        .from('employees')
+        .update(updateData)
+        .eq('id', params.id)
+        .select()
+        .single()
+      updatedEmployee = retry.data
+      updateError = retry.error
+    }
     
     if (updateError) {
       console.error('Error updating employee:', updateError)
@@ -163,16 +232,7 @@ export async function PUT(
       throw new Error('Employee not found after update')
     }
 
-    const changes: Record<string, { from: unknown; to: unknown }> = {}
-    for (const [field, value] of Object.entries(updateData)) {
-      if ((currentEmployee as any)[field] !== value) {
-        changes[field] = {
-          from: (currentEmployee as any)[field] ?? null,
-          to: value,
-        }
-      }
-    }
-    if (Object.keys(changes).length > 0) {
+    if (hasProfileChanges) {
       await logAudit({
         actor: await currentActor(),
         action: 'employee.update',
@@ -202,63 +262,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = getServiceSupabase()
+    const result = await removeEmployeeFromProgram(
+      getServiceSupabase(),
+      params.id,
+      { actor: await currentActor(), via: 'employee-delete' }
+    )
 
-    const { data: employee, error: fetchError } = await supabase
-      .from('employees')
-      .select('id, email, display_name')
-      .eq('id', params.id)
-      .single()
-
-    if (fetchError || !employee) {
+    if (!result) {
       return NextResponse.json(
         { error: 'Employee not found' },
         { status: 404 }
       )
     }
 
-    const { data: employeeDevices, error: devicesError } = await supabase
-      .from('devices')
-      .select('id')
-      .eq('employee_id', params.id)
-
-    if (!devicesError && employeeDevices && employeeDevices.length > 0) {
-      const now = new Date().toISOString()
-      for (const d of employeeDevices) {
-        await closeCurrentAssignments(supabase, d.id, now)
-      }
-
-      const { error: unassignError } = await supabase
-        .from('devices')
-        .update({ employee_id: null, status: 'in_stock' })
-        .in(
-          'id',
-          employeeDevices.map((d) => d.id)
-        )
-
-      if (unassignError) throw unassignError
-    }
-
-    const { error: deleteError } = await supabase
-      .from('employees')
-      .delete()
-      .eq('id', params.id)
-
-    if (deleteError) throw deleteError
-
-    await logAudit({
-      actor: await currentActor(),
-      action: 'employee.delete',
-      entity_type: 'employee',
-      entity_id: employee.id,
-      entity_label: employee.display_name || employee.email,
-      details: {
-        email: employee.email,
-        devices_unassigned: employeeDevices?.length ?? 0,
-      },
-    })
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, devices_returned: result.devicesReturned })
   } catch (error: any) {
     console.error('Error deleting employee:', error)
     return NextResponse.json(

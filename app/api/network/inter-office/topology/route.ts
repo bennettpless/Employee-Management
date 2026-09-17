@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
-import { isAdminRequest } from '@/lib/admin'
+import { requireNetworkOwner } from '@/lib/network-owner'
 
 /**
  * Inter-office topology persistence.
@@ -64,6 +64,8 @@ function toNumber(value: number | string | null): number | null {
  */
 export async function GET() {
     try {
+        const denied = await requireNetworkOwner()
+        if (denied) return denied
         const supabase = getServiceSupabase()
 
         const [officesResult, connectionsResult] = await Promise.all([
@@ -193,12 +195,8 @@ function parseLink(raw: unknown, officeIds: Set<string>): ParsedLink | null {
  */
 export async function PUT(request: NextRequest) {
     try {
-        if (!(await isAdminRequest())) {
-            return NextResponse.json(
-                { error: 'Admin role required' },
-                { status: 403 }
-            )
-        }
+        const denied = await requireNetworkOwner()
+        if (denied) return denied
 
         const body = (await request.json()) as SaveBody
         const rawPositions = body.positions ?? {}

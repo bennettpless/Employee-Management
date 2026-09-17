@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
+import { requireNetworkOwner } from '@/lib/network-owner'
 import {
   buildDevicesCsv,
   slugForFilename,
@@ -19,6 +20,8 @@ const SUPPORTED_FORMATS = new Set(['csv'])
  */
 export async function GET(request: NextRequest) {
   try {
+    const denied = await requireNetworkOwner()
+    if (denied) return denied
     const params = new URL(request.url).searchParams
     const format = (params.get('format') ?? 'csv').toLowerCase()
     const officeId = params.get('officeId') ?? params.get('office_id')

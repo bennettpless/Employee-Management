@@ -4,13 +4,24 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Loader2, X, ChevronsUpDown } from 'lucide-react'
 import { Device } from '@/lib/types'
 import {
-  ASSET_TYPES,
   ASSET_TYPE_LABELS,
   DEPARTMENTS,
-  DEVICE_STATUSES,
-  DEVICE_STATUS_LABELS,
+  DEVICE_STATUS_FILTERS,
+  DEVICE_STATUS_FILTER_LABELS,
+  applyStatusSelect,
+  deviceTypeSelectOptions,
+  statusSelectValue,
   officeNameToLocation,
 } from '@/lib/devices'
+import { defaultLoanerDueDate, isLoanerOverdue } from '@/lib/loaner-checkout'
+import { StockLotFields } from '@/components/stock/StockLotFields'
+import { StockLotPromptDialog } from '@/components/stock/StockLotPromptDialog'
+import {
+  candidateLotsForPrompt,
+  isStockAssetType,
+  pickFifoLot,
+  type LotWithMetrics,
+} from '@/lib/stock-tracker'
 
 interface EmployeeOption {
   id: string
@@ -28,7 +39,9 @@ export interface DeviceFormValues {
   department: string
   location: string
   status: string
+  is_loaner: boolean
   employee_id: string
+  loaner_due_date: string
   commissioned_at: string
   decommissioned_at: string
   warranty_months: string
@@ -47,7 +60,9 @@ function toFormValues(device?: Device | null): DeviceFormValues {
     department: device?.department || '',
     location: device?.location || '',
     status: device?.status || 'active',
+    is_loaner: Boolean(device?.is_loaner),
     employee_id: device?.employee_id || '',
+    loaner_due_date: device?.loaner_due_date || '',
     commissioned_at: device?.commissioned_at || '',
     decommissioned_at: device?.decommissioned_at || '',
     warranty_months: device?.warranty_months != null ? String(device.warranty_months) : '',
@@ -73,6 +88,25 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
   const [locations, setLocations] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [lots, setLots] = useState<LotWithMetrics[]>([])
+  const [chargeOffices, setChargeOffices] = useState<string[]>([])
+  const [lotId, setLotId] = useState(() => device?.stock_lot_id || '')
+  const [chargeOffice, setChargeOffice] = useState('')
+  const [skipLot, setSkipLot] = useState(() => Boolean(device?.not_from_stock))
+  const [lotTouched, setLotTouched] = useState(() => Boolean(device?.stock_lot_id))
+  const [legacyLotPrompt, setLegacyLotPrompt] = useState<{
+    allocation_id: string
+    device: Device
+    candidates: Array<{
+      id: string
+      item_id: string
+      purchase_date: string
+      qty_in_stock: number
+      manufacturer: string | null
+      model: string | null
+    }>
+  } | null>(null)
+  const [legacyLotSaving, setLegacyLotSaving] = useState(false)
 
   // Searchable assignee picker (native <select> typeahead resets after ~1s / 2 chars)
   const [assigneeOpen, setAssigneeOpen] = useState(false)
@@ -83,12 +117,18 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
     let cancelled = false
     const load = async () => {
       try {
-        const [empRes, officeRes] = await Promise.all([
+        const [empRes, officeRes, lotsRes] = await Promise.all([
           fetch('/api/employees?status=active', { cache: 'no-store' }),
           fetch('/api/network/offices', { cache: 'no-store' }),
+          fetch('/api/stock/lots', { cache: 'no-store' }),
         ])
         const empData = await empRes.json()
         const officeData = await officeRes.json()
+        const lotsData = await lotsRes.json()
+        if (!cancelled && lotsRes.ok) {
+          setLots(lotsData.lots || [])
+          setChargeOffices(lotsData.charge_offices || [])
+        }
         if (cancelled) return
         const list: EmployeeOption[] = (empData.employees || []).map((e: any) => ({
           id: e.id,
@@ -141,6 +181,40 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
     return () => document.removeEventListener('mousedown', onDocMouseDown)
   }, [assigneeOpen])
 
+  const needsStockLot =
+    isStockAssetType(form.asset_type) &&
+    !form.is_loaner &&
+    (!device?.employee_id || Boolean(device.not_from_stock))
+  const assigningPerson = Boolean(form.employee_id)
+
+  useEffect(() => {
+    if (!needsStockLot || skipLot || lotTouched) return
+    const picked = pickFifoLot(lots, {
+      asset_type: form.asset_type,
+      manufacturer: form.manufacturer,
+      model: form.model,
+    })
+    setLotId(picked?.id || '')
+  }, [
+    needsStockLot,
+    skipLot,
+    lotTouched,
+    lots,
+    form.asset_type,
+    form.manufacturer,
+    form.model,
+  ])
+
+  const lotOptions = useMemo(
+    () =>
+      candidateLotsForPrompt(lots, {
+        asset_type: form.asset_type,
+        manufacturer: form.manufacturer,
+        model: form.model,
+      }),
+    [lots, form.asset_type, form.manufacturer, form.model]
+  )
+
   const selectedEmployee = useMemo(
     () => employees.find((e) => e.id === form.employee_id) || null,
     [employees, form.employee_id]
@@ -163,7 +237,17 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
   }
 
   const pickAssignee = (id: string) => {
-    setForm((f) => ({ ...f, employee_id: id }))
+    setForm((f) => ({
+      ...f,
+      employee_id: id,
+      status: f.is_loaner ? (id ? 'active' : 'in_stock') : f.status,
+      loaner_due_date:
+        f.is_loaner && id
+          ? f.loaner_due_date || defaultLoanerDueDate()
+          : id
+            ? f.loaner_due_date
+            : '',
+    }))
     setAssigneeOpen(false)
     setAssigneeQuery('')
   }
@@ -172,6 +256,18 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
     if (saving) return
     if (!form.asset_type) {
       setError('Asset type is required')
+      return
+    }
+    if (form.is_loaner && form.employee_id && !form.loaner_due_date) {
+      setError('Loaner due date is required when a loaner is checked out')
+      return
+    }
+    if (needsStockLot && !skipLot && !lotId) {
+      setError('Pick which purchase lot this PC came from, or check Not from stock')
+      return
+    }
+    if (needsStockLot && !skipLot && lotId && assigningPerson && !chargeOffice) {
+      setError('Pick which office to charge')
       return
     }
     setSaving(true)
@@ -187,12 +283,19 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
         department: form.department,
         location: form.location,
         status: form.status,
+        is_loaner: form.is_loaner,
         employee_id: form.employee_id || null,
+        loaner_due_date: form.is_loaner && form.employee_id ? form.loaner_due_date || null : null,
         commissioned_at: form.commissioned_at || null,
         decommissioned_at: form.decommissioned_at || null,
         warranty_months: form.warranty_months ? Number(form.warranty_months) : null,
         warranty_end: form.warranty_end || null,
         notes: form.notes,
+      }
+      if (needsStockLot) {
+        payload.not_from_stock = skipLot
+        payload.lot_id = skipLot ? null : lotId || null
+        payload.charge_office = skipLot ? null : chargeOffice || null
       }
       const res = await fetch(device ? `/api/devices/${device.id}` : '/api/devices', {
         method: device ? 'PATCH' : 'POST',
@@ -203,6 +306,14 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
       const data = await res.json()
       if (!res.ok) {
         throw new Error(data.error || 'Failed to save device')
+      }
+      if (data.stock_lot && data.stock_lot.allocation_id && !data.stock_lot.selected_lot_id) {
+        setLegacyLotPrompt({
+          allocation_id: data.stock_lot.allocation_id,
+          device: data.device,
+          candidates: data.stock_lot.candidates || [],
+        })
+        return
       }
       onSaved(data.device)
     } catch (e: any) {
@@ -222,7 +333,7 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">{device ? 'Edit Device' : 'Add Device'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600" disabled={saving}>
@@ -252,7 +363,7 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
             </label>
             <select value={form.asset_type} onChange={set('asset_type')} className={inputClass} disabled={saving}>
               <option value="">Select type...</option>
-              {ASSET_TYPES.map((t) => (
+              {deviceTypeSelectOptions(form.asset_type).map((t) => (
                 <option key={t} value={t}>{ASSET_TYPE_LABELS[t]}</option>
               ))}
             </select>
@@ -280,9 +391,27 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
 
           <div>
             <label className={labelClass}>Status</label>
-            <select value={form.status} onChange={set('status')} className={inputClass} disabled={saving}>
-              {DEVICE_STATUSES.map((s) => (
-                <option key={s} value={s}>{DEVICE_STATUS_LABELS[s]}</option>
+            <select
+              value={statusSelectValue(form.status, form.is_loaner)}
+              onChange={(e) => {
+                const next = applyStatusSelect(e.target.value, Boolean(form.employee_id))
+                setForm((f) => ({
+                  ...f,
+                  status: next.status,
+                  is_loaner: next.is_loaner,
+                  loaner_due_date:
+                    next.is_loaner && f.employee_id
+                      ? f.loaner_due_date || defaultLoanerDueDate()
+                      : next.is_loaner
+                        ? f.loaner_due_date
+                        : '',
+                }))
+              }}
+              className={inputClass}
+              disabled={saving}
+            >
+              {DEVICE_STATUS_FILTERS.map((s) => (
+                <option key={s} value={s}>{DEVICE_STATUS_FILTER_LABELS[s]}</option>
               ))}
             </select>
           </div>
@@ -357,6 +486,25 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
             </div>
           </div>
 
+          {form.is_loaner && form.employee_id && (
+            <div className="md:col-span-2">
+              <label className={labelClass}>
+                Loaner due date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={form.loaner_due_date}
+                onChange={set('loaner_due_date')}
+                className={inputClass}
+                disabled={saving}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Defaults to 14 days from today. Overdue loaners show on the Devices list.
+                {isLoanerOverdue(form.loaner_due_date, true) ? ' This date is already past due.' : ''}
+              </p>
+            </div>
+          )}
+
           <div>
             <label className={labelClass}>Department</label>
             <select value={form.department} onChange={set('department')} className={inputClass} disabled={saving}>
@@ -404,8 +552,40 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
 
           <div className="md:col-span-2">
             <label className={labelClass}>Notes</label>
-            <textarea value={form.notes} onChange={set('notes')} rows={3} placeholder="Condition, issues, loaner designation..." className={inputClass} disabled={saving} />
+            <textarea value={form.notes} onChange={set('notes')} rows={3} placeholder="Condition, issues..." className={inputClass} disabled={saving} />
           </div>
+
+          {needsStockLot && (
+            <StockLotFields
+              lots={lotOptions}
+              lotId={lotId}
+              skipLot={skipLot}
+              onLotId={(id) => {
+                setLotTouched(true)
+                setSkipLot(false)
+                setLotId(id)
+              }}
+              onSkip={(skip) => {
+                setSkipLot(skip)
+                if (skip) {
+                  setLotId('')
+                  setChargeOffice('')
+                }
+              }}
+              chargeOffices={chargeOffices}
+              chargeOffice={chargeOffice}
+              onChargeOffice={setChargeOffice}
+              disabled={saving}
+              showCharge={assigningPerson}
+              hint={
+                device?.not_from_stock
+                  ? 'This PC is marked Not from stock. Leave that checked, or pick a lot if it should be charged.'
+                  : assigningPerson
+                    ? undefined
+                    : 'Pick which purchase lot this PC came from. Charge to is asked when someone is assigned.'
+              }
+            />
+          )}
         </div>
 
         {error && (
@@ -438,6 +618,51 @@ export default function DeviceFormModal({ device, onSaved, onClose }: DeviceForm
           </button>
         </div>
       </div>
+      {legacyLotPrompt && (
+        <StockLotPromptDialog
+          candidates={legacyLotPrompt.candidates}
+          saving={legacyLotSaving}
+          chargeOffices={chargeOffices}
+          onConfirmLot={async (lotId, office) => {
+            setLegacyLotSaving(true)
+            setError(null)
+            try {
+              const res = await fetch(`/api/stock/allocations/${legacyLotPrompt.allocation_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lot_id: lotId, charge_office: office }),
+              })
+              const data = await res.json()
+              if (!res.ok) throw new Error(data.error || 'Failed to attach lot')
+              setLegacyLotPrompt(null)
+              onSaved(legacyLotPrompt.device)
+            } catch (e: any) {
+              setError(e.message)
+            } finally {
+              setLegacyLotSaving(false)
+            }
+          }}
+          onNotFromStock={async () => {
+            setLegacyLotSaving(true)
+            setError(null)
+            try {
+              const res = await fetch(`/api/stock/allocations/${legacyLotPrompt.allocation_id}`, {
+                method: 'DELETE',
+              })
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}))
+                throw new Error(data.error || 'Failed to mark Not from stock')
+              }
+              setLegacyLotPrompt(null)
+              onSaved(legacyLotPrompt.device)
+            } catch (e: any) {
+              setError(e.message)
+            } finally {
+              setLegacyLotSaving(false)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

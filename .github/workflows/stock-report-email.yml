@@ -1,0 +1,29 @@
+name: Monthly stock report email
+
+on:
+  schedule:
+    # 1st of each month 12:00 UTC (7–8am Eastern). Sends the month that just closed.
+    - cron: '0 12 1 * *'
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Email previous month stock report
+        env:
+          APP_URL: https://app-ems-bp-prod.azurewebsites.net
+          CRON_SECRET: ${{ secrets.SYNC_CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "SYNC_CRON_SECRET is not set in GitHub Actions secrets"
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/stock-report-email.json -w "%{http_code}" \
+            -X POST "$APP_URL/api/cron/stock-report" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json")
+          cat /tmp/stock-report-email.json
+          echo
+          echo "HTTP $status"
+          test "$status" = "200"

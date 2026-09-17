@@ -12,7 +12,8 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
 
   const errorMessages: Record<string, string> = {
-    AccessDenied: 'Access denied. Only @bennett-pless.com and @bpl-enclosure.com email addresses are allowed.',
+      AccessDenied:
+      'Access denied. Your account must be on the Admin list in Settings.',
     OAuthCallback: 'Authentication failed. Please try again.',
     OAuthSignin: 'Could not start sign-in. Please try again.',
     Default: 'An unexpected error occurred. Please try again.',

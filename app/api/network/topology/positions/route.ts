@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
-import { isAdminRequest } from '@/lib/admin'
+import { requireNetworkOwner } from '@/lib/network-owner'
 
 /**
  * POST /api/network/topology/positions
@@ -35,12 +35,8 @@ function parseUpdate(raw: unknown): PositionUpdate | null {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAdminRequest())) {
-      return NextResponse.json(
-        { error: 'Admin role required' },
-        { status: 403 }
-      )
-    }
+    const denied = await requireNetworkOwner()
+    if (denied) return denied
 
     const body = (await request.json()) as unknown
     const list: unknown[] = Array.isArray(body) ? body : [body]

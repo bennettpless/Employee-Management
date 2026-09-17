@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isAdminRequest } from '@/lib/admin'
+import { requireNetworkOwner } from '@/lib/network-owner'
 import { parseFile } from '@/lib/network-import'
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
@@ -17,12 +17,8 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAdminRequest())) {
-      return NextResponse.json(
-        { error: 'Admin role required' },
-        { status: 403 }
-      )
-    }
+    const denied = await requireNetworkOwner()
+    if (denied) return denied
 
     const formData = await request.formData()
     const file = formData.get('file')

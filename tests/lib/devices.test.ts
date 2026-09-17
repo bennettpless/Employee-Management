@@ -4,6 +4,9 @@ import {
   departmentForEmployee,
   departmentFromTitle,
   officeNameToLocation,
+  sanitizeDeviceBody,
+  statusSelectValue,
+  applyStatusSelect,
 } from '@/lib/devices'
 
 describe('DEPARTMENTS', () => {
@@ -148,5 +151,35 @@ describe('officeNameToLocation (regression cover — unchanged in Phase 21)', ()
   it('groups Orlando/Sarasota under Florida', () => {
     expect(officeNameToLocation('Orlando')).toBe('Florida')
     expect(officeNameToLocation('Sarasota Office')).toBe('Florida')
+  })
+})
+
+describe('sanitizeDeviceBody is_loaner', () => {
+  it('coerces truthy values to boolean', () => {
+    expect(sanitizeDeviceBody({ is_loaner: true }).is_loaner).toBe(true)
+    expect(sanitizeDeviceBody({ is_loaner: false }).is_loaner).toBe(false)
+    expect(sanitizeDeviceBody({ is_loaner: 1 }).is_loaner).toBe(true)
+  })
+
+  it('coerces not_from_stock to boolean', () => {
+    expect(sanitizeDeviceBody({ not_from_stock: true }).not_from_stock).toBe(true)
+    expect(sanitizeDeviceBody({ not_from_stock: false }).not_from_stock).toBe(false)
+    expect(sanitizeDeviceBody({ not_from_stock: 1 }).not_from_stock).toBe(true)
+  })
+})
+
+describe('statusSelectValue / applyStatusSelect', () => {
+  it('shows Loaner in the dropdown when is_loaner is set', () => {
+    expect(statusSelectValue('active', true)).toBe('loaner')
+    expect(statusSelectValue('in_stock', false)).toBe('in_stock')
+  })
+
+  it('maps Loaner to in_stock when unassigned and active when assigned', () => {
+    expect(applyStatusSelect('loaner', false)).toEqual({ status: 'in_stock', is_loaner: true })
+    expect(applyStatusSelect('loaner', true)).toEqual({ status: 'active', is_loaner: true })
+  })
+
+  it('clears the loaner flag when picking a regular status', () => {
+    expect(applyStatusSelect('repair', false)).toEqual({ status: 'repair', is_loaner: false })
   })
 })

@@ -49,8 +49,6 @@ jobs:
           NINJA_CLIENT_SECRET: ${{ secrets.NINJA_CLIENT_SECRET }}
           NINJA_REGION: ${{ secrets.NINJA_REGION }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
-          IT_RESPONSE_AGENT_URL: ${{ secrets.IT_RESPONSE_AGENT_URL }}
-          IT_RESPONSE_AGENT_API_KEY: ${{ secrets.IT_RESPONSE_AGENT_API_KEY }}
           DEVICE_INVENTORY_WORKBOOK: ${{ secrets.DEVICE_INVENTORY_WORKBOOK }}
           ONBOARDING_WORKBOOK: ${{ secrets.ONBOARDING_WORKBOOK }}
 

@@ -8,6 +8,9 @@ export interface Employee {
   job_title: string | null
   department: string | null
   office_location: string | null
+  azure_job_title_acked?: string | null
+  azure_office_acked?: string | null
+  azure_department_acked?: string | null
   phone_number: string | null
   mobile_phone: string | null
   manager_entra_id: string | null
@@ -21,7 +24,16 @@ export interface Employee {
 
 export type DeviceStatus = 'active' | 'in_stock' | 'repair' | 'decommissioned'
 
-export type AssetType = 'laptop' | 'desktop' | 'monitor' | 'tv' | 'printer' | 'server' | 'other'
+export type AssetType =
+  | 'laptop'
+  | 'desktop'
+  | 'monitor'
+  | 'tv'
+  | 'printer'
+  | 'server'
+  | 'ssd'
+  | 'ram'
+  | 'other'
 
 export interface Device {
   id: string
@@ -45,6 +57,11 @@ export interface Device {
   os_version: string | null
   last_seen: string | null
   status: DeviceStatus
+  is_loaner: boolean
+  loaner_due_date?: string | null
+  loaner_checked_out_at?: string | null
+  not_from_stock?: boolean
+  stock_lot_id?: string | null
   azure_device_id: string | null
   is_in_ninja: boolean
   last_synced_at: string
@@ -59,6 +76,18 @@ export interface DeviceHistoryEntry {
   event_type: 'repair' | 'upgrade' | 'note'
   event_date: string
   description: string
+  created_at: string
+}
+
+export interface LoanerCheckout {
+  id: string
+  device_id: string
+  employee_id: string | null
+  employee_name: string | null
+  employee_email: string | null
+  checked_out_at: string
+  due_date: string | null
+  returned_at: string | null
   created_at: string
 }
 

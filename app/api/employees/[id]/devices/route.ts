@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
+import { closeCurrentAssignments, insertAssignmentHistory } from '@/lib/devices'
+import { applyLoanerOnAssign, applyLoanerOnReturn, employeeSnapshotFrom } from '@/lib/loaner-checkout'
+import { maybeConsumeStockLot, requireChargeOffice } from '@/lib/stock-consume'
+import { consumeSkipError, parseChargeOfficeInput } from '@/lib/stock-tracker'
+import { currentActor } from '@/lib/audit'
 
 export async function POST(
   request: NextRequest,
@@ -8,180 +13,112 @@ export async function POST(
   try {
     const supabase = getServiceSupabase()
     const body = await request.json()
-    const { device_name, device_type, device_id } = body
-    
-    if (!device_id && (!device_name || !device_name.trim())) {
+    const { device_id, loaner_due_date } = body
+
+    if (!device_id) {
       return NextResponse.json(
-        { error: 'Either device_id or device_name is required' },
+        { error: 'Pick a device that is already in inventory' },
         { status: 400 }
       )
     }
-    
+
     const { data: employee, error: empError } = await supabase
       .from('employees')
-      .select('id, email')
+      .select('id, email, display_name, first_name, last_name, office_location')
       .eq('id', params.id)
       .single()
-    
+
     if (empError || !employee) {
       return NextResponse.json(
         { error: 'Employee not found' },
         { status: 404 }
       )
     }
-    
-    let resultDeviceId: string
-    let resultDeviceName: string
-    
-    if (device_id) {
-      const { data: existingDevice, error: deviceError } = await supabase
-        .from('devices')
-        .select('*')
-        .eq('id', device_id)
-        .single()
-      
-      if (deviceError || !existingDevice) {
-        return NextResponse.json(
-          { error: 'Device not found' },
-          { status: 404 }
-        )
-      }
-      
-      if (existingDevice.employee_id === params.id) {
-        return NextResponse.json(
-          { error: 'Device is already assigned to this employee' },
-          { status: 400 }
-        )
-      }
-      
-      if (existingDevice.employee_id) {
-        await supabase
-          .from('device_assignments_history')
-          .update({
-            is_current: false,
-            unassignment_date: new Date().toISOString()
-          })
-          .eq('device_id', existingDevice.id)
-          .eq('employee_id', existingDevice.employee_id)
-          .eq('is_current', true)
-        
-        await supabase
-          .from('devices')
-          .update({ employee_id: null })
-          .eq('id', existingDevice.id)
-      }
-      
-      const { error: assignError } = await supabase
-        .from('devices')
-        .update({ 
-          employee_id: params.id,
-          device_type: device_type || existingDevice.device_type || null,
-          status: existingDevice.status === 'in_stock' ? 'active' : existingDevice.status,
-        })
-        .eq('id', existingDevice.id)
-      
-      if (assignError) throw assignError
-      
-      await supabase
-        .from('device_assignments_history')
-        .insert({
-          device_id: existingDevice.id,
-          employee_id: params.id,
-          assignment_date: new Date().toISOString(),
-          is_current: true
-        })
-      
-      resultDeviceId = existingDevice.id
-      resultDeviceName = existingDevice.device_name
-    } else {
-      const deviceName = device_name.trim()
-      
-      const { data: existingByName } = await supabase
-        .from('devices')
-        .select('*')
-        .eq('device_name', deviceName)
-        .maybeSingle()
-      
-      if (existingByName) {
-        if (existingByName.employee_id === params.id) {
-          return NextResponse.json(
-            { error: 'Device is already assigned to this employee' },
-            { status: 400 }
-          )
-        }
-        
-        if (existingByName.employee_id) {
-          await supabase
-            .from('device_assignments_history')
-            .update({
-              is_current: false,
-              unassignment_date: new Date().toISOString()
-            })
-            .eq('device_id', existingByName.id)
-            .eq('employee_id', existingByName.employee_id)
-            .eq('is_current', true)
-          
-          await supabase
-            .from('devices')
-            .update({ employee_id: null })
-            .eq('id', existingByName.id)
-        }
-        
-        const { error: assignError } = await supabase
-          .from('devices')
-          .update({ 
-            employee_id: params.id,
-            device_type: device_type || existingByName.device_type || null
-          })
-          .eq('id', existingByName.id)
-        
-        if (assignError) throw assignError
-        
-        await supabase
-          .from('device_assignments_history')
-          .insert({
-            device_id: existingByName.id,
-            employee_id: params.id,
-            assignment_date: new Date().toISOString(),
-            is_current: true
-          })
-        
-        resultDeviceId = existingByName.id
-        resultDeviceName = deviceName
-      } else {
-        const { data: newDevice, error: createError } = await supabase
-          .from('devices')
-          .insert({
-            device_name: deviceName,
-            device_type: device_type || null,
-            employee_id: params.id,
-            ninja_device_id: `manual-${deviceName}-${Date.now()}`,
-            is_in_ninja: false,
-            status: 'active'
-          })
-          .select()
-          .single()
-        
-        if (createError) throw createError
-        
-        await supabase
-          .from('device_assignments_history')
-          .insert({
-            device_id: newDevice.id,
-            employee_id: params.id,
-            assignment_date: new Date().toISOString(),
-            is_current: true
-          })
-        
-        resultDeviceId = newDevice.id
-        resultDeviceName = deviceName
-      }
+
+    const { data: existingDevice, error: deviceError } = await supabase
+      .from('devices')
+      .select('*')
+      .eq('id', device_id)
+      .single()
+
+    if (deviceError || !existingDevice) {
+      return NextResponse.json(
+        { error: 'Device not found' },
+        { status: 404 }
+      )
     }
-    
-    return NextResponse.json({ 
+
+    if (existingDevice.employee_id === params.id) {
+      return NextResponse.json(
+        { error: 'Device is already assigned to this employee' },
+        { status: 400 }
+      )
+    }
+
+    let chargeOffice: string | null = null
+    const chargeInput = parseChargeOfficeInput(body)
+    if (chargeInput) {
+      const charge = await requireChargeOffice(chargeInput, supabase)
+      if (!charge.ok) {
+        return NextResponse.json({ error: charge.error }, { status: 400 })
+      }
+      chargeOffice = charge.office
+    }
+
+    if (existingDevice.employee_id) {
+      const now = new Date().toISOString()
+      await closeCurrentAssignments(supabase, existingDevice.id, now)
+      await applyLoanerOnReturn(supabase, existingDevice.id, now)
+
+      await supabase
+        .from('devices')
+        .update({ employee_id: null })
+        .eq('id', existingDevice.id)
+    }
+
+    const { error: assignError } = await supabase
+      .from('devices')
+      .update({
+        employee_id: params.id,
+        device_type: body.device_type || existingDevice.device_type || null,
+        status: existingDevice.status === 'in_stock' ? 'active' : existingDevice.status,
+      })
+      .eq('id', existingDevice.id)
+
+    if (assignError) throw assignError
+
+    const snapshot = employeeSnapshotFrom(employee)
+    await insertAssignmentHistory(supabase, {
+      deviceId: existingDevice.id,
+      employeeId: params.id,
+      snapshot,
+    })
+    await applyLoanerOnAssign(supabase, {
+      deviceId: existingDevice.id,
+      isLoaner: Boolean(existingDevice.is_loaner),
+      employeeId: params.id,
+      snapshot,
+      dueDate: loaner_due_date || null,
+    })
+    const consume = await maybeConsumeStockLot(supabase, {
+      device: existingDevice,
+      nextEmployeeId: params.id,
+      actor: await currentActor(),
+      lotId: body.lot_id ? String(body.lot_id) : null,
+      notFromStock: Boolean(body.not_from_stock),
+      chargeOffice,
+    })
+    const skipError = consumeSkipError(consume.skipped)
+    if (skipError && consume.skipped !== 'charge-office-required') {
+      return NextResponse.json({ error: skipError }, { status: 400 })
+    }
+
+    return NextResponse.json({
       success: true,
       message: 'Device added successfully',
-      device: { id: resultDeviceId, device_name: resultDeviceName }
+      device: { id: existingDevice.id, device_name: existingDevice.device_name },
+      stock_lot: consume.prompt || null,
+      skipped: consume.skipped || null,
     })
   } catch (error: any) {
     console.error('Error adding device:', error)

@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
 import { readWorkbookSheetRaw, workbookRefFromEnv, excelValueToIsoDate } from '@/lib/sharepoint-workbook'
-import { buildEmployeeMatcher, closeCurrentAssignments, departmentForEmployee } from '@/lib/devices'
+import { buildEmployeeMatcher, closeCurrentAssignments, departmentForEmployee, insertAssignmentHistory, officeNameToLocation } from '@/lib/devices'
 import { ninjaOne } from '@/lib/ninjaone'
 import { currentActor, logAudit } from '@/lib/audit'
 import type { SyncReviewItem } from '@/lib/sync-review'
+import {
+  chassisToAssetType,
+  ninjaInsertRow,
+  ninjaSerialKey,
+  normalizeSerial,
+} from '@/lib/ninja-inventory'
+import { applyLoanerOnAssign, applyLoanerOnReturn } from '@/lib/loaner-checkout'
+import { removeEmployeeFromProgram } from '@/lib/offboard'
+import { maybeConsumeStockLot, fetchLotsWithMetrics, promptFromResolution, promptForDevice } from '@/lib/stock-consume'
+import { resolveStockLot, chargeOfficeOptions } from '@/lib/stock-tracker'
+import { listAzureDirectoryUsers } from '@/lib/azure-graph'
+import { azureUserEmailKey, diffAzureEmployee } from '@/lib/azure-employee-sync'
 
 export const maxDuration = 300
 
@@ -94,36 +106,6 @@ function parseMachineCell(raw: string | null): { mode: 'new' | 'existing' | null
   return { mode, pcName: null, tokens: [] }
 }
 
-function chassisToAssetType(nodeClass: unknown, chassisType: unknown): string | null {
-  const nc = String(nodeClass ?? '').toLowerCase()
-  if (nc.includes('server')) return 'server'
-  const chassis = String(chassisType ?? '').toLowerCase()
-  if (/laptop|notebook|portable|convertible/.test(chassis)) return 'laptop'
-  if (/desktop|tower|mini|small form|sff/.test(chassis)) return 'desktop'
-  return null
-}
-
-/** Max unmatched Ninja devices to insert per sync (servers / unassigned gear). */
-const MAX_NINJA_NEW = 100
-
-/** Normalize a serial for matching (case-insensitive; ignore short / empty). */
-function normalizeSerial(raw: unknown): string | null {
-  const key = String(raw ?? '')
-    .toLowerCase()
-    .trim()
-  return key.length >= 4 ? key : null
-}
-
-/** Pull serial from a Ninja list or detail payload. */
-function ninjaSerialKey(ninja: any): string | null {
-  return (
-    normalizeSerial(ninja?.system?.serialNumber) ||
-    normalizeSerial(ninja?.system?.biosSerialNumber) ||
-    normalizeSerial(ninja?.serialNumber) ||
-    null
-  )
-}
-
 function deviceReviewFields(device: {
   asset_type?: string | null
   status?: string | null
@@ -133,6 +115,8 @@ function deviceReviewFields(device: {
   manufacturer?: string | null
   model?: string | null
   device_name?: string | null
+  is_loaner?: boolean | null
+  not_from_stock?: boolean | null
 }) {
   return {
     asset_type: device.asset_type ?? null,
@@ -142,6 +126,8 @@ function deviceReviewFields(device: {
     serial_number: device.serial_number ?? null,
     manufacturer: device.manufacturer ?? null,
     model: device.model ?? null,
+    is_loaner: Boolean(device.is_loaner),
+    not_from_stock: Boolean(device.not_from_stock),
     label: device.device_name || device.serial_number || 'Device',
   }
 }
@@ -182,16 +168,34 @@ export async function POST(_request: NextRequest) {
     let offboarded = 0
     let devicesReturned = 0
     let ninjaNew = 0
+    let azureUpdated = 0
     const processed: { onboarding: string[]; offboarding: string[] } = {
       onboarding: [],
       offboarding: [],
     }
 
     // One snapshot of employees for "already added" detection and name matching
-    const { data: allEmployees, error: empError } = await supabase
-      .from('employees')
-      .select('id, email, display_name, first_name, last_name, employment_status, job_title')
-    if (empError) throw empError
+    let allEmployees: any[] | null = null
+    {
+      const withAck = await supabase
+        .from('employees')
+        .select(
+          'id, email, display_name, first_name, last_name, employment_status, job_title, office_location, department, azure_job_title_acked, azure_office_acked, azure_department_acked'
+        )
+      if (withAck.error && /azure_job_title_acked/.test(withAck.error.message || '')) {
+        const retry = await supabase
+          .from('employees')
+          .select(
+            'id, email, display_name, first_name, last_name, employment_status, job_title, office_location, department'
+          )
+        if (retry.error) throw retry.error
+        allEmployees = retry.data
+      } else if (withAck.error) {
+        throw withAck.error
+      } else {
+        allEmployees = withAck.data
+      }
+    }
     const matchEmployee = buildEmployeeMatcher(allEmployees || [])
     const employeeById = new Map((allEmployees || []).map((e: any) => [e.id, e]))
     const knownEmails = new Set(
@@ -306,17 +310,15 @@ export async function POST(_request: NextRequest) {
           notes: `Added by onboarding sync for ${employeeName} (details from NinjaOne)`,
           last_synced_at: new Date().toISOString(),
         })
-        .select('id, device_name, asset_type, status, department, location, serial_number, manufacturer, model')
+        .select('id, device_name, asset_type, status, department, location, serial_number, manufacturer, model, is_loaner')
         .single()
       if (devError || !createdDevice) {
         errors.push(`Onboarding: failed to add machine "${pcName}" from NinjaOne: ${devError?.message}`)
         return null
       }
-      await supabase.from('device_assignments_history').insert({
-        device_id: createdDevice.id,
-        employee_id: employeeId,
-        assignment_date: new Date().toISOString(),
-        is_current: true,
+      await insertAssignmentHistory(supabase, {
+        deviceId: createdDevice.id,
+        employeeId,
       })
       await logAudit({
         actor,
@@ -358,7 +360,7 @@ export async function POST(_request: NextRequest) {
         const { data: matches } = await supabase
           .from('devices')
           .select(
-            'id, employee_id, device_name, serial_number, asset_tag, asset_type, status, department, location, manufacturer, model, ninja_device_id'
+            'id, employee_id, device_name, serial_number, asset_tag, asset_type, status, department, location, manufacturer, model, ninja_device_id, is_loaner'
           )
           .ilike('device_name', `%${t}%`)
           .limit(5)
@@ -411,7 +413,7 @@ export async function POST(_request: NextRequest) {
           const { data: byNinjaId } = await supabase
             .from('devices')
             .select(
-              'id, employee_id, device_name, serial_number, asset_tag, asset_type, status, department, location, manufacturer, model, ninja_device_id'
+              'id, employee_id, device_name, serial_number, asset_tag, asset_type, status, department, location, manufacturer, model, ninja_device_id, is_loaner'
             )
             .eq('ninja_device_id', ninjaId)
             .maybeSingle()
@@ -433,12 +435,20 @@ export async function POST(_request: NextRequest) {
                 employeeId,
                 (deviceCountByEmp.get(employeeId) || 0) + 1
               )
+              const consume = await maybeConsumeStockLot(supabase, {
+                device: createdDev,
+                nextEmployeeId: employeeId,
+                actor,
+                force: true,
+              })
               const fields = deviceReviewFields(createdDev)
               review.push({
                 kind: 'device_created',
                 id: createdDev.id,
                 ...fields,
                 employee_name: employeeName,
+                employee_id: employeeId,
+                stock_lot: consume.prompt || null,
               })
             }
             return
@@ -465,6 +475,21 @@ export async function POST(_request: NextRequest) {
               `Onboarding: could not queue "${machine.pcName}" for retry: ${queueError.message}`
             )
           }
+          const lots = await fetchLotsWithMetrics(supabase)
+          const resolution = resolveStockLot(lots, {
+            asset_type: null,
+            manufacturer: null,
+            model: null,
+          })
+          review.push({
+            kind: 'device_pending',
+            id: `pending:${employeeId}:${machine.pcName}`,
+            label: machine.pcName,
+            employee_name: employeeName,
+            employee_id: employeeId,
+            location,
+            stock_lot: promptFromResolution(resolution, null, null),
+          })
           return
         }
       }
@@ -472,6 +497,9 @@ export async function POST(_request: NextRequest) {
       if (!device || device.employee_id === employeeId) return
 
       await closeCurrentAssignments(supabase, device.id)
+      if (device.is_loaner) {
+        await applyLoanerOnReturn(supabase, device.id)
+      }
       const newDept = departmentForEmployee(email, jobTitle)
       await supabase
         .from('devices')
@@ -481,11 +509,20 @@ export async function POST(_request: NextRequest) {
           department: newDept,
         })
         .eq('id', device.id)
-      await supabase.from('device_assignments_history').insert({
-        device_id: device.id,
-        employee_id: employeeId,
-        assignment_date: new Date().toISOString(),
-        is_current: true,
+      await insertAssignmentHistory(supabase, {
+        deviceId: device.id,
+        employeeId,
+      })
+      await applyLoanerOnAssign(supabase, {
+        deviceId: device.id,
+        isLoaner: Boolean(device.is_loaner),
+        employeeId,
+        snapshot: { name: employeeName, email },
+      })
+      const consume = await maybeConsumeStockLot(supabase, {
+        device,
+        nextEmployeeId: employeeId,
+        actor,
       })
       devicesAssigned++
       deviceCountByEmp.set(employeeId, (deviceCountByEmp.get(employeeId) || 0) + 1)
@@ -499,6 +536,8 @@ export async function POST(_request: NextRequest) {
         id: device.id,
         ...fields,
         employee_name: employeeName,
+        employee_id: employeeId,
+        stock_lot: consume.prompt || null,
       })
       await logAudit({
         actor,
@@ -553,11 +592,14 @@ export async function POST(_request: NextRequest) {
               department: dept,
             })
             .eq('id', inInventory.id)
-          await supabase.from('device_assignments_history').insert({
-            device_id: inInventory.id,
-            employee_id: pending.employee_id,
-            assignment_date: new Date().toISOString(),
-            is_current: true,
+          await insertAssignmentHistory(supabase, {
+            deviceId: inInventory.id,
+            employeeId: pending.employee_id,
+          })
+          const consume = await maybeConsumeStockLot(supabase, {
+            device: inInventory,
+            nextEmployeeId: pending.employee_id,
+            actor,
           })
           devicesAssigned++
           deviceCountByEmp.set(
@@ -570,6 +612,8 @@ export async function POST(_request: NextRequest) {
             id: inInventory.id,
             ...fields,
             employee_name: employeeName,
+            employee_id: pending.employee_id,
+            stock_lot: consume.prompt || null,
           })
           await logAudit({
             actor,
@@ -592,7 +636,7 @@ export async function POST(_request: NextRequest) {
             pending.machine_name,
             pending.employee_id,
             employeeName,
-            null,
+            officeNameToLocation(employee?.office_location || '') || employee?.office_location || null,
             departmentForEmployee(employee?.email, employee?.job_title)
           )
           if (created) {
@@ -601,12 +645,20 @@ export async function POST(_request: NextRequest) {
               pending.employee_id,
               (deviceCountByEmp.get(pending.employee_id) || 0) + 1
             )
+            const consume = await maybeConsumeStockLot(supabase, {
+              device: created,
+              nextEmployeeId: pending.employee_id,
+              actor,
+              force: true,
+            })
             const fields = deviceReviewFields(created)
             review.push({
               kind: 'device_created',
               id: created.id,
               ...fields,
               employee_name: employeeName,
+              employee_id: pending.employee_id,
+              stock_lot: consume.prompt || null,
             })
             await supabase.from('pending_device_lookups').delete().eq('id', pending.id)
           }
@@ -798,16 +850,11 @@ export async function POST(_request: NextRequest) {
       const { data: theirDevices } = await supabase
         .from('devices')
         .select(
-          'id, device_name, serial_number, asset_type, status, department, location, manufacturer, model'
+          'id, device_name, serial_number, asset_type, status, department, location, manufacturer, model, is_loaner'
         )
         .eq('employee_id', employeeId)
 
       for (const device of theirDevices || []) {
-        await supabase
-          .from('devices')
-          .update({ employee_id: null, status: 'in_stock' })
-          .eq('id', device.id)
-        await closeCurrentAssignments(supabase, device.id)
         devicesReturned++
         const fields = deviceReviewFields({ ...device, status: 'in_stock' })
         review.push({
@@ -826,14 +873,18 @@ export async function POST(_request: NextRequest) {
         })
       }
 
-      const { error: deleteError } = await supabase
-        .from('employees')
-        .delete()
-        .eq('id', employeeId)
-      if (deleteError) {
-        errors.push(`Offboarding: failed to remove ${name}: ${deleteError.message}`)
+      let result
+      try {
+        result = await removeEmployeeFromProgram(supabase, employeeId, {
+          actor,
+          via: 'onboarding-sync',
+          terminationDate: termIso,
+        })
+      } catch (e: any) {
+        errors.push(`Offboarding: failed to remove ${name}: ${e?.message || e}`)
         continue
       }
+      if (!result) continue
 
       employeeById.delete(employeeId)
       offboarded++
@@ -841,20 +892,6 @@ export async function POST(_request: NextRequest) {
         kind: 'employee_offboarded',
         id: employeeId,
         label: name,
-      })
-
-      await logAudit({
-        actor,
-        action: 'employee.offboard',
-        entity_type: 'employee',
-        entity_id: employeeId,
-        entity_label: name,
-        details: {
-          via: 'onboarding-sync',
-          termination_date: termIso,
-          devices_returned: (theirDevices || []).length,
-          removed: true,
-        },
       })
     }
 
@@ -870,7 +907,6 @@ export async function POST(_request: NextRequest) {
       if (existingErr) throw existingErr
 
       const byNinjaId = new Set<string>()
-      // serial → inventory row (match + optional ninja_device_id link)
       const bySerial = new Map<string, { id: string; ninja_device_id: string | null }>()
       for (const d of existingDevices || []) {
         if (d.ninja_device_id) byNinjaId.add(String(d.ninja_device_id))
@@ -904,7 +940,7 @@ export async function POST(_request: NextRequest) {
             errors.push(
               `Ninja inventory: could not link "${label}" to existing serial: ${linkErr.message}`
             )
-            return true // matched; link failed but do not insert a duplicate
+            return true
           }
           existing.ninja_device_id = ninjaId
           linkedExisting++
@@ -913,8 +949,6 @@ export async function POST(_request: NextRequest) {
         return true
       }
 
-      // Pre-filter: already linked by Ninja id, or serial present on the list
-      // payload and already in inventory.
       const unmatched: any[] = []
       for (const n of ninjaDevices || []) {
         const ninjaId = String(n.id ?? '')
@@ -932,9 +966,10 @@ export async function POST(_request: NextRequest) {
         unmatched.push(n)
       }
 
-      // Cap inserts; walk candidates until insert cap or detail-fetch budget.
+      const MAX_NINJA_NEW = 100
       const MAX_DETAIL_FETCHES = MAX_NINJA_NEW * 3
       let examined = 0
+      const ninjaLots = await fetchLotsWithMetrics(supabase)
 
       for (let i = 0; i < unmatched.length; i++) {
         if (ninjaNew >= MAX_NINJA_NEW) break
@@ -961,50 +996,20 @@ export async function POST(_request: NextRequest) {
           continue
         }
 
-        let lastSeen: string | null = null
-        if (details.lastContact) {
-          const ts = parseFloat(details.lastContact)
-          if (Number.isFinite(ts)) lastSeen = new Date(ts * 1000).toISOString()
-        }
-
-        const assetType =
-          chassisToAssetType(details.nodeClass, details.system?.chassisType) || 'other'
-        const deviceName = details.systemName || details.dnsName || `Ninja ${hit.id}`
-        const manufacturer = details.system?.manufacturer || null
-        const model = details.system?.model || null
-        const serial =
-          details.system?.serialNumber ||
-          details.system?.biosSerialNumber ||
-          details.serialNumber ||
-          null
+        const row = ninjaInsertRow(details)
+        row.notes = 'Added by onboarding sync from NinjaOne (unassigned)'
 
         const { data: inserted, error: insErr } = await supabase
           .from('devices')
-          .insert({
-            device_name: deviceName,
-            ninja_device_id: ninjaId,
-            is_in_ninja: true,
-            device_type: details.nodeClass || null,
-            asset_type: assetType,
-            manufacturer,
-            model,
-            serial_number: serial,
-            os_name: details.os?.name || null,
-            os_version: details.os?.version || null,
-            last_seen: lastSeen,
-            employee_id: null,
-            status: 'in_stock',
-            notes: 'Added by onboarding sync from NinjaOne (unassigned)',
-            last_synced_at: new Date().toISOString(),
-          })
+          .insert(row)
           .select(
-            'id, device_name, asset_type, status, department, location, serial_number, manufacturer, model'
+            'id, device_name, asset_type, status, department, location, serial_number, manufacturer, model, is_loaner'
           )
           .single()
 
         if (insErr || !inserted) {
           errors.push(
-            `Ninja inventory: failed to add "${deviceName}": ${insErr?.message || 'unknown error'}`
+            `Ninja inventory: failed to add "${row.device_name}": ${insErr?.message || 'unknown error'}`
           )
           continue
         }
@@ -1024,20 +1029,21 @@ export async function POST(_request: NextRequest) {
           id: inserted.id,
           ...fields,
           employee_name: null,
+          stock_lot: promptForDevice(ninjaLots, inserted),
         })
         await logAudit({
           actor,
           action: 'device.create',
           entity_type: 'device',
           entity_id: inserted.id,
-          entity_label: deviceName,
+          entity_label: String(row.device_name),
           details: {
             source: 'ninjaone',
             via: 'onboarding-sync-ninja-inventory',
             unassigned: true,
-            manufacturer,
-            model,
-            serial_number: serial,
+            manufacturer: row.manufacturer,
+            model: row.model,
+            serial_number: row.serial_number,
           },
         })
       }
@@ -1064,9 +1070,80 @@ export async function POST(_request: NextRequest) {
       errors.push(`Ninja inventory pass failed: ${ninjaInvErr.message}`)
     }
 
+    try {
+      const { data: officeRows, error: officeError } = await supabase.from('offices').select('name')
+      if (officeError) throw officeError
+      const allowedLocations = Array.from(
+        new Set([
+          ...chargeOfficeOptions((officeRows || []).map((row: { name?: string | null }) => row.name)),
+          'Remote',
+        ])
+      )
+      const azureUsers = await listAzureDirectoryUsers()
+      const azureByEmail = new Map<string, (typeof azureUsers)[number]>()
+      for (const user of azureUsers) {
+        const key = azureUserEmailKey(user)
+        if (key) azureByEmail.set(key, user)
+      }
+      const skipIds = new Set(
+        review
+          .filter((item) => item.kind === 'employee_onboarded' || item.kind === 'employee_offboarded')
+          .map((item) => item.id)
+      )
+      const MAX_AZURE_PROFILE = 50
+      for (const emp of allEmployees || []) {
+        if (skipIds.has(emp.id)) continue
+        const email = String(emp.email || '').toLowerCase()
+        if (!email) continue
+        const azure = azureByEmail.get(email)
+        if (!azure) continue
+        const diff = diffAzureEmployee({
+          employeeId: emp.id,
+          label: emp.display_name || email,
+          email,
+          currentJobTitle: emp.job_title,
+          currentOffice: emp.office_location,
+          currentDepartment: emp.department,
+          azureJobTitle: azure.jobTitle,
+          azureOffice: azure.officeLocation,
+          azureDepartment: azure.department,
+          ackedJobTitle: emp.azure_job_title_acked,
+          ackedOffice: emp.azure_office_acked,
+          ackedDepartment: emp.azure_department_acked,
+          allowedLocations,
+        })
+        if (!diff) continue
+        if (azureUpdated >= MAX_AZURE_PROFILE) {
+          errors.push(
+            `Azure profile: imported ${MAX_AZURE_PROFILE} title/office/department changes this run; sync again for more`
+          )
+          break
+        }
+        azureUpdated += 1
+        review.push({
+          kind: 'employee_updated',
+          id: diff.employeeId,
+          label: diff.label,
+          employee_id: diff.employeeId,
+          employee_name: diff.label,
+          job_title: diff.currentJobTitle,
+          proposed_job_title: diff.proposedJobTitle,
+          office_location: diff.currentOffice,
+          proposed_office_location: diff.proposedOffice,
+          department: diff.currentDepartment,
+          proposed_department: diff.proposedDepartment,
+          azure_job_title: diff.azureJobTitle,
+          azure_office_location: diff.azureOffice,
+          azure_department: diff.azureDepartment,
+        })
+      }
+    } catch (azureErr: any) {
+      errors.push(`Azure title/office pass failed: ${azureErr.message}`)
+    }
+
     await finishLog({
       status: errors.length > 0 ? 'partial' : 'success',
-      records_synced: onboarded + updated + offboarded + ninjaNew,
+      records_synced: onboarded + updated + offboarded + ninjaNew + azureUpdated,
       records_failed: errors.length,
       error_message: errors.length > 0 ? errors.slice(0, 20).join('\n') : null,
     })
@@ -1085,6 +1162,7 @@ export async function POST(_request: NextRequest) {
           offboarded,
           devicesReturned,
           ninjaNew,
+          azureUpdated,
         },
         warnings: errors.length,
       },
@@ -1102,6 +1180,7 @@ export async function POST(_request: NextRequest) {
         offboarded,
         devicesReturned,
         ninjaNew,
+        azureUpdated,
       },
       review: { items: review },
       errors: errors.slice(0, 100),

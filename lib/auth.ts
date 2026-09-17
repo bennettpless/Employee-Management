@@ -1,14 +1,8 @@
 import type { NextAuthOptions } from 'next-auth'
 import AzureADProvider from 'next-auth/providers/azure-ad'
+import { getRoleForEmail } from '@/lib/role-store'
 
 const ALLOWED_DOMAINS = ['bennett-pless.com', 'bpl-enclosure.com']
-
-const ADMIN_EMAILS = [
-  'cajohnson@bennett-pless.com',
-  'plucas@bennett-pless.com',
-  'dsimmons@bennett-pless.com',
-  'kthom@bennett-pless.com',
-]
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -40,7 +34,10 @@ export const authOptions: NextAuthOptions = {
       if (!email) return false
 
       const domain = email.split('@')[1]?.toLowerCase()
-      return ALLOWED_DOMAINS.includes(domain)
+      if (!ALLOWED_DOMAINS.includes(domain)) return false
+
+      const role = await getRoleForEmail(email)
+      return role === 'admin'
     },
 
     async jwt({ token, profile }) {
@@ -48,9 +45,11 @@ export const authOptions: NextAuthOptions = {
         const email = profile.email ?? (profile as Record<string, unknown>).preferred_username as string | undefined
         if (email) {
           token.email = email
-          token.role = ADMIN_EMAILS.includes(email.toLowerCase()) ? 'admin' : 'user'
+          token.role = (await getRoleForEmail(email)) ?? undefined
         }
         token.name = profile.name ?? (profile as Record<string, unknown>).displayName as string | undefined
+      } else if (token.email) {
+        token.role = (await getRoleForEmail(token.email as string)) ?? undefined
       }
       return token
     },
@@ -59,7 +58,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.email = token.email as string
         session.user.name = token.name as string
-        ;(session.user as Record<string, unknown>).role = token.role
+        session.user.role = token.role as 'admin' | 'accounting' | undefined
       }
       return session
     },

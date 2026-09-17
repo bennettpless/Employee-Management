@@ -69,15 +69,16 @@ function mapAssetType(raw: unknown): AssetType {
   return 'other'
 }
 
-function mapStatus(raw: unknown): { status: DeviceStatus; note: string | null } {
+function mapStatus(raw: unknown): { status: DeviceStatus; note: string | null; isLoaner: boolean } {
   const s = String(raw ?? '').trim().toLowerCase()
-  if (s === 'in use') return { status: 'active', note: null }
-  if (s === 'in stock') return { status: 'in_stock', note: null }
-  if (s === 'decommissioned' || s === 'retired') return { status: 'decommissioned', note: null }
-  if (s === 'broken' || s === 'repair' || s === 'in repair') return { status: 'repair', note: s === 'broken' ? 'Broken' : null }
-  if (!s) return { status: 'in_stock', note: null }
+  if (s === 'loaner' || s === 'spare') return { status: 'in_stock', note: null, isLoaner: true }
+  if (s === 'in use') return { status: 'active', note: null, isLoaner: false }
+  if (s === 'in stock') return { status: 'in_stock', note: null, isLoaner: false }
+  if (s === 'decommissioned' || s === 'retired') return { status: 'decommissioned', note: null, isLoaner: false }
+  if (s === 'broken' || s === 'repair' || s === 'in repair') return { status: 'repair', note: s === 'broken' ? 'Broken' : null, isLoaner: false }
+  if (!s) return { status: 'in_stock', note: null, isLoaner: false }
   // Unknown sheet status: keep the device usable, preserve the label
-  return { status: 'in_stock', note: `Sheet status: ${String(raw).trim()}` }
+  return { status: 'in_stock', note: `Sheet status: ${String(raw).trim()}`, isLoaner: false }
 }
 
 function parseWarrantyMonths(raw: unknown): number | null {
@@ -152,7 +153,7 @@ export async function POST(_request: NextRequest) {
         continue
       }
 
-      const { status, note: statusNote } = mapStatus(row[h.status])
+      const { status, note: statusNote, isLoaner: statusIsLoaner } = mapStatus(row[h.status])
 
       let assetTag = h.asset_tag ? text(row[h.asset_tag]) : null
       if (assetTag) {
@@ -167,10 +168,10 @@ export async function POST(_request: NextRequest) {
 
       const assignedUserRaw = h.assigned_user ? String(row[h.assigned_user] ?? '').trim() : ''
       let employeeId: string | null = null
-      let assignedNote: string | null = null
+      let isLoaner = statusIsLoaner
       if (assignedUserRaw && !isNA(assignedUserRaw)) {
         if (assignedUserRaw.toLowerCase() === 'loaner' || assignedUserRaw.toLowerCase() === 'spare') {
-          assignedNote = `Designated ${assignedUserRaw.trim().toLowerCase()}`
+          isLoaner = true
         } else {
           employeeId = matchEmployee(assignedUserRaw)
           if (!employeeId) unmatchedUsers.add(assignedUserRaw)
@@ -179,12 +180,11 @@ export async function POST(_request: NextRequest) {
 
       const noteParts: string[] = []
       if (statusNote) noteParts.push(statusNote)
-      if (assignedNote) noteParts.push(assignedNote)
       const condition = h.condition ? text(row[h.condition]) : null
       if (condition && condition.toLowerCase() !== 'healthy') noteParts.push(`Condition: ${condition}`)
       const win11 = h.win11 ? text(row[h.win11]) : null
       if (win11) noteParts.push(`Win 11 compatible: ${win11}`)
-      if (!employeeId && assignedUserRaw && !isNA(assignedUserRaw) && !assignedNote) {
+      if (!employeeId && assignedUserRaw && !isNA(assignedUserRaw) && !isLoaner) {
         noteParts.push(`Assigned user (unmatched): ${assignedUserRaw}`)
       }
 
@@ -206,6 +206,7 @@ export async function POST(_request: NextRequest) {
         location: h.location ? text(row[h.location]) : null,
         department: h.department ? text(row[h.department]) : null,
         status,
+        is_loaner: isLoaner,
         employee_id: employeeId,
         commissioned_at: h.commissioned_at ? excelValueToIsoDate(isNA(row[h.commissioned_at]) ? null : row[h.commissioned_at]) : null,
         decommissioned_at: h.decommissioned_at ? excelValueToIsoDate(isNA(row[h.decommissioned_at]) ? null : row[h.decommissioned_at]) : null,

@@ -4,10 +4,19 @@ import {
   ASSET_TYPES,
   DEPARTMENTS,
   DEVICE_STATUSES,
+  insertAssignmentHistory,
   officeNameToLocation,
   sanitizeDeviceBody,
 } from '@/lib/devices'
 import { currentActor, logAudit } from '@/lib/audit'
+import {
+  employeeSnapshotFrom,
+  isoDateOnly,
+  loanerFieldsForAssignment,
+  openLoanerCheckout,
+} from '@/lib/loaner-checkout'
+import { consumeSkipError, isStockAssetType, parseChargeOfficeInput } from '@/lib/stock-tracker'
+import { fetchLotsWithMetrics, maybeConsumeStockLot, requireChargeOffice } from '@/lib/stock-consume'
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +35,15 @@ export async function GET(request: NextRequest) {
       `)
       .order('asset_tag', { ascending: true, nullsFirst: false })
 
-    if (status && DEVICE_STATUSES.includes(status as any)) {
+    if (status === 'loaner') {
+      query = query.eq('is_loaner', true)
+    } else if (status === 'overdue') {
+      query = query
+        .eq('is_loaner', true)
+        .not('employee_id', 'is', null)
+        .not('loaner_due_date', 'is', null)
+        .lt('loaner_due_date', isoDateOnly())
+    } else if (status && DEVICE_STATUSES.includes(status as any)) {
       query = query.eq('status', status)
     }
     if (assetType && ASSET_TYPES.includes(assetType as any)) {
@@ -47,7 +64,7 @@ export async function GET(request: NextRequest) {
     // currently filtering on) AND as the source for the chip counts.
     const { data: allRows, error: countError } = await supabase
       .from('devices')
-      .select('status, asset_type, department, location')
+      .select('status, asset_type, department, location, is_loaner, employee_id, loaner_due_date')
     if (countError) throw countError
 
     const rows = allRows || []
@@ -69,6 +86,11 @@ export async function GET(request: NextRequest) {
     for (const s of DEVICE_STATUSES) {
       counts[s] = chipRows.filter((d: any) => d.status === s).length
     }
+    counts.loaner = chipRows.filter((d: any) => d.is_loaner).length
+    const today = isoDateOnly()
+    counts.overdue = chipRows.filter(
+      (d: any) => d.is_loaner && d.employee_id && d.loaner_due_date && d.loaner_due_date < today
+    ).length
     const typeCounts: Record<string, number> = {}
     for (const t of ASSET_TYPES) {
       typeCounts[t] = chipRows.filter((d: any) => d.asset_type === t).length
@@ -148,6 +170,38 @@ export async function POST(request: NextRequest) {
     if (!insertData.asset_type) {
       return NextResponse.json({ error: 'Asset type is required' }, { status: 400 })
     }
+    const notFromStock = Boolean(body.not_from_stock)
+    const lotId = body.lot_id ? String(body.lot_id) : null
+    const isPc = isStockAssetType(String(insertData.asset_type || ''))
+    const isLoaner = Boolean(insertData.is_loaner)
+    let chargeOffice: string | null = null
+    if (isPc && !isLoaner && !notFromStock) {
+      if (!lotId) {
+        return NextResponse.json(
+          { error: 'Pick a purchase lot or check Not from stock' },
+          { status: 400 }
+        )
+      }
+      const lots = await fetchLotsWithMetrics(supabase)
+      const lot = lots.find((l) => l.id === lotId)
+      if (!lot) {
+        return NextResponse.json({ error: 'Purchase lot not found' }, { status: 400 })
+      }
+      if (lot.qty_in_stock < 1) {
+        return NextResponse.json(
+          { error: 'That purchase lot has no remaining quantity' },
+          { status: 400 }
+        )
+      }
+      insertData.stock_lot_id = lotId
+      if (insertData.employee_id) {
+        const charge = await requireChargeOffice(parseChargeOfficeInput(body), supabase)
+        if (!charge.ok) {
+          return NextResponse.json({ error: charge.error }, { status: 400 })
+        }
+        chargeOffice = charge.office
+      }
+    }
     if (!insertData.status) {
       insertData.status = 'active'
     }
@@ -158,6 +212,20 @@ export async function POST(request: NextRequest) {
         [insertData.manufacturer, insertData.model].filter(Boolean).join(' ') ||
         insertData.serial_number ||
         'Unnamed device'
+    }
+
+    const loanerOnCreate = loanerFieldsForAssignment({
+      isLoaner: Boolean(insertData.is_loaner),
+      nextEmployeeId: (insertData.employee_id as string | null) ?? null,
+      dueDate: (insertData.loaner_due_date as string | null) ?? null,
+      existingCheckedOutAt: null,
+      assigneeChanging: Boolean(insertData.employee_id),
+      becomingLoaner: Boolean(insertData.is_loaner),
+    })
+    insertData.loaner_due_date = loanerOnCreate.loaner_due_date
+    insertData.loaner_checked_out_at = loanerOnCreate.loaner_checked_out_at
+    if (isPc) {
+      insertData.not_from_stock = notFromStock
     }
 
     const { data: device, error } = await supabase
@@ -180,12 +248,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (device.employee_id) {
-      await supabase.from('device_assignments_history').insert({
-        device_id: device.id,
-        employee_id: device.employee_id,
-        assignment_date: new Date().toISOString(),
-        is_current: true,
+      const snapshot = employeeSnapshotFrom(device.employee)
+      await insertAssignmentHistory(supabase, {
+        deviceId: device.id,
+        employeeId: device.employee_id,
+        snapshot,
       })
+      if (loanerOnCreate.shouldOpenCheckout) {
+        await openLoanerCheckout(supabase, {
+          deviceId: device.id,
+          employeeId: device.employee_id,
+          snapshot,
+          dueDate: loanerOnCreate.loaner_due_date,
+          checkedOutAt: loanerOnCreate.loaner_checked_out_at || undefined,
+        })
+      }
     }
 
     await logAudit({
@@ -200,7 +277,24 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ device }, { status: 201 })
+    let stockLotPrompt = undefined as Awaited<ReturnType<typeof maybeConsumeStockLot>>['prompt']
+    if (isPc && !device.is_loaner && !notFromStock && lotId) {
+      const consume = await maybeConsumeStockLot(supabase, {
+        device,
+        nextEmployeeId: device.employee_id,
+        actor: await currentActor(),
+        force: true,
+        lotId,
+        chargeOffice,
+      })
+      const skipError = consumeSkipError(consume.skipped)
+      if (skipError) {
+        return NextResponse.json({ error: skipError }, { status: 400 })
+      }
+      stockLotPrompt = consume.prompt
+    }
+
+    return NextResponse.json({ device, stock_lot: stockLotPrompt || null }, { status: 201 })
   } catch (error: any) {
     console.error('Error creating device:', error)
     return NextResponse.json(

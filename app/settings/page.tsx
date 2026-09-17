@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { ArrowLeft, Database, Shield, RefreshCw, CheckCircle, XCircle, Loader2, Building2, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Database, Shield, RefreshCw, CheckCircle, XCircle, Loader2, Building2, ChevronRight, Network } from 'lucide-react'
+import { canAccessNetwork } from '@/lib/network-access'
+import AccessRoleLists from '@/components/settings/AccessRoleLists'
 
 interface ServiceStatus {
   name: string
@@ -46,6 +48,7 @@ export default function SettingsPage() {
   const { data: session } = useSession()
   const role = (session?.user as { role?: string } | undefined)?.role
   const isAdmin = role === 'admin'
+  const showNetwork = canAccessNetwork(session?.user?.email)
 
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -252,6 +255,8 @@ export default function SettingsPage() {
 
         {/* Admin Tools */}
         {isAdmin && (
+          <>
+          <AccessRoleLists />
           <div className="mt-8">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Admin Tools</h2>
             <div className="grid md:grid-cols-2 gap-6">
@@ -274,8 +279,30 @@ export default function SettingsPage() {
                   <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" />
                 </div>
               </Link>
+              {showNetwork && (
+                <Link
+                  href="/network"
+                  className="group bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="bg-purple-100 rounded-lg p-3 mr-4">
+                        <Network className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Network inventory</h3>
+                        <p className="text-sm text-gray-600">
+                          Office map, topology diagrams, and network device import.
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors flex-shrink-0" />
+                  </div>
+                </Link>
+              )}
             </div>
           </div>
+          </>
         )}
 
       </div>

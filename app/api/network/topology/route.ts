@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
+import { requireNetworkOwner } from '@/lib/network-owner'
 import { resolveDevicePositions } from '@/lib/network-layout'
 import type { NetworkDevice, NetworkDeviceConnection } from '@/lib/types'
 
@@ -19,6 +20,8 @@ import type { NetworkDevice, NetworkDeviceConnection } from '@/lib/types'
  */
 export async function GET(request: NextRequest) {
   try {
+    const denied = await requireNetworkOwner()
+    if (denied) return denied
     const officeId = new URL(request.url).searchParams.get('officeId')
     if (!officeId) {
       return NextResponse.json(

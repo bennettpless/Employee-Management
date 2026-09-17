@@ -1,8 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronsUpDown, Loader2, Plus, Trash2, X } from 'lucide-react'
-import { formatMakeModel, officeNameToLocation } from '@/lib/devices'
+import { ChevronsUpDown, Loader2, Plus, UserMinus, X } from 'lucide-react'
+import { formatMakeModel, officeNameToLocation, DEPARTMENTS } from '@/lib/devices'
+import { defaultLoanerDueDate } from '@/lib/loaner-checkout'
+import { StockLotPromptDialog } from '@/components/stock/StockLotPromptDialog'
 
 export interface EmployeeEditValues {
   id: string
@@ -41,6 +43,8 @@ interface AssignedDevice {
   manufacturer: string | null
   model: string | null
   status: string | null
+  is_loaner?: boolean
+  loaner_due_date?: string | null
 }
 
 interface AssignableDevice {
@@ -53,6 +57,7 @@ interface AssignableDevice {
   model: string | null
   status: string | null
   employee_id: string | null
+  is_loaner?: boolean
 }
 
 function toForm(employee: EmployeeEditValues): FormState {
@@ -111,6 +116,23 @@ export default function EmployeeFormModal({
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingLoaner, setPendingLoaner] = useState<AssignableDevice | null>(null)
+  const [loanerDueDate, setLoanerDueDate] = useState(defaultLoanerDueDate())
+  const [lotPrompt, setLotPrompt] = useState<{
+    allocation_id: string | null
+    device_id: string
+    selected_lot_id?: string
+    candidates: Array<{
+      id: string
+      item_id: string
+      purchase_date: string
+      qty_in_stock: number
+      unit_cost?: number
+      manufacturer: string | null
+      model: string | null
+    }>
+  } | null>(null)
+  const [lotSaving, setLotSaving] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
 
   const loadDevices = useCallback(async () => {
@@ -225,7 +247,7 @@ export default function EmployeeFormModal({
 
   const busy = saving || deleting || !!assigningId || !!unassigningId
 
-  const handleAssign = async (deviceId: string) => {
+  const handleAssign = async (deviceId: string, dueDate?: string) => {
     if (busy) return
     setAssigningId(deviceId)
     setError(null)
@@ -233,15 +255,30 @@ export default function EmployeeFormModal({
       const res = await fetch(`/api/employees/${employee.id}/devices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id: deviceId }),
+        body: JSON.stringify({
+          device_id: deviceId,
+          ...(dueDate ? { loaner_due_date: dueDate } : {}),
+        }),
         cache: 'no-store',
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to assign device')
       setPickerOpen(false)
       setPickerQuery('')
+      setPendingLoaner(null)
       await loadDevices()
       onDevicesChanged?.()
+      if (
+        data.stock_lot &&
+        (data.stock_lot.allocation_id || data.skipped === 'charge-office-required')
+      ) {
+        setLotPrompt({
+          allocation_id: data.stock_lot.allocation_id || null,
+          device_id: data.device?.id || deviceId,
+          candidates: data.stock_lot.candidates || [],
+          selected_lot_id: data.stock_lot.selected_lot_id || '',
+        })
+      }
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -282,21 +319,39 @@ export default function EmployeeFormModal({
     setSaving(true)
     setError(null)
     try {
+      const payload = {
+        email: form.email.trim(),
+        first_name: form.first_name.trim() || null,
+        last_name: form.last_name.trim() || null,
+        display_name: form.display_name.trim() || null,
+        job_title: form.job_title.trim() || null,
+        department: form.department.trim() || null,
+        office_location: form.office_location.trim() || null,
+        phone_number: form.phone_number.trim() || null,
+        extension: form.extension.trim() || null,
+        username: form.username.trim() || null,
+      }
+      const unchanged = (a: string | null | undefined, b: string | null | undefined) =>
+        String(a ?? '').trim() === String(b ?? '').trim()
+      if (
+        unchanged(payload.email, employee.email) &&
+        unchanged(payload.first_name, employee.first_name) &&
+        unchanged(payload.last_name, employee.last_name) &&
+        unchanged(payload.display_name, employee.display_name) &&
+        unchanged(payload.job_title, employee.job_title) &&
+        unchanged(payload.department, employee.department) &&
+        unchanged(payload.office_location, employee.office_location) &&
+        unchanged(payload.phone_number, employee.phone_number) &&
+        unchanged(payload.extension, employee.extension) &&
+        unchanged(payload.username, employee.username)
+      ) {
+        onSaved(employee)
+        return
+      }
       const res = await fetch(`/api/employees/${employee.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: form.email.trim(),
-          first_name: form.first_name.trim() || null,
-          last_name: form.last_name.trim() || null,
-          display_name: form.display_name.trim() || null,
-          job_title: form.job_title.trim() || null,
-          department: form.department.trim() || null,
-          office_location: form.office_location.trim() || null,
-          phone_number: form.phone_number.trim() || null,
-          extension: form.extension.trim() || null,
-          username: form.username.trim() || null,
-        }),
+        body: JSON.stringify(payload),
         cache: 'no-store',
       })
       const data = await res.json()
@@ -322,7 +377,7 @@ export default function EmployeeFormModal({
       employee.email
     if (
       !confirm(
-        `Delete ${label}? Assigned devices will be unassigned and set to in stock. This cannot be undone.`
+        `Offboard ${label} and remove them from this program?\n\nThey will be deleted from EMS. Assigned devices (including loaners) will be returned to stock. This cannot be undone.`
       )
     ) {
       return
@@ -330,13 +385,13 @@ export default function EmployeeFormModal({
     setDeleting(true)
     setError(null)
     try {
-      const res = await fetch(`/api/employees/${employee.id}`, {
-        method: 'DELETE',
+      const res = await fetch(`/api/employees/${employee.id}/offboard`, {
+        method: 'POST',
         cache: 'no-store',
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to delete employee')
+        throw new Error(data.error || 'Failed to offboard employee')
       }
       onDeleted?.()
       onClose()
@@ -358,7 +413,7 @@ export default function EmployeeFormModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Edit Employee</h2>
@@ -448,13 +503,22 @@ export default function EmployeeFormModal({
           </div>
           <div>
             <label className={labelClass}>Department</label>
-            <input
-              type="text"
+            <select
               value={form.department}
               onChange={setField('department')}
               className={inputClass}
               disabled={busy}
-            />
+            >
+              <option value="">— None —</option>
+              {(form.department && !(DEPARTMENTS as readonly string[]).includes(form.department)
+                ? [form.department, ...DEPARTMENTS]
+                : DEPARTMENTS
+              ).map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={labelClass}>Office / Location</label>
@@ -535,6 +599,11 @@ export default function EmployeeFormModal({
                           {[d.asset_type, d.asset_tag, d.serial_number]
                             .filter(Boolean)
                             .join(' · ') || '—'}
+                          {d.is_loaner && d.loaner_due_date
+                            ? ` · Loaner due ${d.loaner_due_date}`
+                            : d.is_loaner
+                              ? ' · Loaner'
+                              : ''}
                         </p>
                       </div>
                       <button
@@ -595,7 +664,15 @@ export default function EmployeeFormModal({
                           <li key={d.id}>
                             <button
                               type="button"
-                              onClick={() => handleAssign(d.id)}
+                              onClick={() => {
+                                if (d.is_loaner) {
+                                  setPendingLoaner(d)
+                                  setLoanerDueDate(defaultLoanerDueDate())
+                                  setPickerOpen(false)
+                                  return
+                                }
+                                void handleAssign(d.id)
+                              }}
                               disabled={busy}
                               className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 text-gray-900 disabled:opacity-50"
                             >
@@ -628,6 +705,45 @@ export default function EmployeeFormModal({
           )}
         </div>
 
+        {pendingLoaner && (
+          <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <p className="text-sm font-medium text-gray-900 mb-1">
+              Check out loaner
+            </p>
+            <p className="text-xs text-gray-600 mb-3">
+              {deviceLabel(pendingLoaner)} — set when it is due back (default 14 days).
+            </p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Due date
+            </label>
+            <input
+              type="date"
+              value={loanerDueDate}
+              onChange={(e) => setLoanerDueDate(e.target.value)}
+              className={inputClass}
+              disabled={busy}
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => setPendingLoaner(null)}
+                disabled={busy}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-white disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleAssign(pendingLoaner.id, loanerDueDate)}
+                disabled={busy || !loanerDueDate}
+                className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                Check out
+              </button>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
             {error}
@@ -644,12 +760,12 @@ export default function EmployeeFormModal({
             {deleting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Deleting…
+                Removing…
               </>
             ) : (
               <>
-                <Trash2 className="w-4 h-4" />
-                Delete
+                <UserMinus className="w-4 h-4" />
+                Offboard
               </>
             )}
           </button>
@@ -680,6 +796,69 @@ export default function EmployeeFormModal({
           </div>
         </div>
       </div>
+      {lotPrompt && (
+        <StockLotPromptDialog
+          candidates={lotPrompt.candidates}
+          saving={lotSaving}
+          initialLotId={lotPrompt.selected_lot_id}
+          onConfirmLot={async (lotId, office) => {
+            setLotSaving(true)
+            setError(null)
+            try {
+              const res = lotPrompt.allocation_id
+                ? await fetch(`/api/stock/allocations/${lotPrompt.allocation_id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lot_id: lotId, charge_office: office }),
+                  })
+                : await fetch('/api/stock/allocations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      device_id: lotPrompt.device_id,
+                      employee_id: employee.id,
+                      lot_id: lotId,
+                      charge_office: office,
+                    }),
+                  })
+              const data = await res.json()
+              if (!res.ok) throw new Error(data.error || 'Failed to attach lot')
+              setLotPrompt(null)
+            } catch (e: any) {
+              setError(e.message)
+            } finally {
+              setLotSaving(false)
+            }
+          }}
+          onNotFromStock={async () => {
+            setLotSaving(true)
+            setError(null)
+            try {
+              const res = lotPrompt.allocation_id
+                ? await fetch(`/api/stock/allocations/${lotPrompt.allocation_id}`, {
+                    method: 'DELETE',
+                  })
+                : await fetch('/api/stock/allocations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      device_id: lotPrompt.device_id,
+                      not_from_stock: true,
+                    }),
+                  })
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}))
+                throw new Error(data.error || 'Failed to mark Not from stock')
+              }
+              setLotPrompt(null)
+            } catch (e: any) {
+              setError(e.message)
+            } finally {
+              setLotSaving(false)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

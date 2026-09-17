@@ -1,6 +1,6 @@
 # Employee & Network Inventory System
 
-A unified **employee, equipment, and network inventory** for Bennett & Pless — who has what device, and how every office is wired together. Integrates with **SharePoint workbooks** (onboarding + device inventory), **NinjaOne** (device lookup), **Supabase** (database), and the **IT Response Agent**.
+A unified **employee, equipment, and network inventory** for Bennett & Pless — who has what device, and how every office is wired together. Integrates with **SharePoint workbooks** (onboarding + device inventory), **NinjaOne** (device lookup), and **Supabase** (database).
 
 ## 🌟 Features
 
@@ -12,7 +12,6 @@ A unified **employee, equipment, and network inventory** for Bennett & Pless —
 - **Topology Diagrams**: Per-office React Flow diagrams with drag-to-edit connections, plus an inter-office connectivity map
 - **Exports**: Device-list CSV (company-wide or per office) and topology PNG/PDF
 - **Audit Log**: Every create/update/delete recorded and browsable at `/audit`
-- **IT Response Agent**: Embedded review dashboard with a live pending-review badge
 
 ### Key Capabilities
 - ✅ Onboarding/offboarding sync from the SharePoint workbook with a review modal for every device it changes
@@ -179,7 +178,7 @@ There are **no scheduled syncs** — the old nightly NinjaOne/Intune device sync
 ## 📱 Pages Overview
 
 ### Home Dashboard (`/`)
-Overview of all modules with quick access cards and the IT Response Agent pending-review badge
+Overview of all modules with quick access cards
 
 ### Employees (`/employees`)
 - Active employees from the onboarding sync, with search and filters
@@ -189,6 +188,14 @@ Overview of all modules with quick access cards and the IT Response Agent pendin
 - Full asset inventory with type/status/department/location filters
 - **Sync Onboarding/Offboarding** button + sync-review modal
 - Cleanup banner and ⚠ flags for non-canonical department/location values
+
+### Stock Tracker (`/stock`)
+- Purchase lots (qty, unit cost, remaining stock value) for laptops and desktops
+- Assigning a PC from In Stock consumes one unit; returning it to stock does not restore quantity
+
+### Stock Reports (`/stock/reports`)
+- Office allocations by month, month-to-month, or calendar year
+- Download CSV for the period on screen
 
 ### Device Detail (`/devices/[id]`)
 - Specs, current assignee, and full assignment history
@@ -211,11 +218,9 @@ Overview of all modules with quick access cards and the IT Response Agent pendin
 ### Audit (`/audit`)
 - Browsable log of every create/update/delete with actor and timestamp
 
-### Response Agent (`/response-agent`)
-- Embedded IT Response Agent review dashboard
-
 ### Settings (`/settings`, `/settings/offices`)
 - Integration status overview; office CRUD (admin-only)
+- **Access** lists: who can sign in as Admin vs Accounting
 
 ## 🔐 Security Considerations
 

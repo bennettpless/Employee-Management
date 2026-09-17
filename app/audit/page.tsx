@@ -37,6 +37,8 @@ const ACTION_LABELS: Record<string, string> = {
   'device_history.delete': 'Repair/upgrade entry removed',
   'employee.onboard': 'Employee onboarded',
   'employee.offboard': 'Employee offboarded',
+  'employee.delete': 'Employee offboarded',
+  'employee.update': 'Employee updated',
   'sync.onboarding': 'Onboarding sync run',
   'sync.inventory_import': 'Inventory import run',
 }

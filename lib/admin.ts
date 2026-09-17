@@ -1,18 +1,31 @@
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { DEV_AUTH_DISABLED } from '@/lib/dev-auth'
+import { getRoleForEmail } from '@/lib/role-store'
+import type { AppRole } from '@/lib/roles'
+
+async function sessionEmail(): Promise<string | null> {
+  const session = await getServerSession(authOptions)
+  return session?.user?.email ?? null
+}
 
 /**
- * Returns true when the current request's session belongs to a user mapped to
- * the `admin` role in `lib/auth.ts` (the `ADMIN_EMAILS` allow-list).
- *
- * Use this in API route handlers to gate mutating endpoints. The middleware
- * already ensures the user is authenticated; this only checks role.
+ * Returns true when the current request belongs to an admin. Prefers the
+ * Settings-managed `app_user_roles` table over the JWT so a role change
+ * applies without waiting for the user to sign in again.
  */
 export async function isAdminRequest(): Promise<boolean> {
-  // ⚠️ TEMPORARY: dev auth bypass treats every request as admin.
   if (DEV_AUTH_DISABLED) return true
-  const session = await getServerSession(authOptions)
-  const role = (session?.user as { role?: string } | undefined)?.role
-  return role === 'admin'
+  const email = await sessionEmail()
+  return (await getRoleForEmail(email)) === 'admin'
+}
+
+export async function getRequestRole(): Promise<AppRole | null> {
+  if (DEV_AUTH_DISABLED) return 'admin'
+  return getRoleForEmail(await sessionEmail())
+}
+
+export async function isStockAccessRequest(): Promise<boolean> {
+  if (DEV_AUTH_DISABLED) return true
+  return (await getRequestRole()) === 'admin'
 }

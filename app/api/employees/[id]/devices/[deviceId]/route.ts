@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
+import { applyLoanerOnReturn } from '@/lib/loaner-checkout'
 
 export async function DELETE(
   request: NextRequest,
@@ -47,6 +48,8 @@ export async function DELETE(
       .eq('id', params.deviceId)
     
     if (unassignError) throw unassignError
+
+    await applyLoanerOnReturn(supabase, params.deviceId)
     
     await supabase
       .from('device_assignments_history')

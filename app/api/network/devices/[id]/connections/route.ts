@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
-import { isAdminRequest } from '@/lib/admin'
+import { requireNetworkOwner } from '@/lib/network-owner'
 import type { NetworkLinkType } from '@/lib/types'
 
 const VALID_LINK_TYPES: readonly NetworkLinkType[] = [
@@ -33,12 +33,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    if (!(await isAdminRequest())) {
-      return NextResponse.json(
-        { error: 'Admin role required' },
-        { status: 403 }
-      )
-    }
+    const denied = await requireNetworkOwner()
+    if (denied) return denied
 
     const sourceId = params.id
     const body = (await request.json()) as Record<string, unknown>
@@ -151,12 +147,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    if (!(await isAdminRequest())) {
-      return NextResponse.json(
-        { error: 'Admin role required' },
-        { status: 403 }
-      )
-    }
+    const denied = await requireNetworkOwner()
+    if (denied) return denied
 
     const sourceId = params.id
     const url = new URL(request.url)

@@ -8,13 +8,14 @@ import {
   User, Calendar, Building, Home, Pencil, Trash2, Plus, Wrench, ArrowUpCircle, StickyNote, MapPin, Tag, ShieldCheck,
 } from 'lucide-react'
 import { format } from 'date-fns'
-import { Device, DeviceHistoryEntry } from '@/lib/types'
+import { Device, DeviceHistoryEntry, LoanerCheckout } from '@/lib/types'
 import { ASSET_TYPE_LABELS, DEVICE_STATUS_LABELS, formatMakeModel } from '@/lib/devices'
 import DeviceFormModal from '@/components/devices/DeviceFormModal'
+import { isLoanerOverdue } from '@/lib/loaner-checkout'
 
 interface AssignmentUser {
   employee: {
-    id: string
+    id: string | null
     display_name: string | null
     email: string
     first_name: string | null
@@ -29,6 +30,7 @@ interface DeviceWithRelations extends Device {
   history: DeviceHistoryEntry[]
   current_users?: AssignmentUser[]
   previous_users?: AssignmentUser[]
+  loaner_checkouts?: LoanerCheckout[]
 }
 
 const statusBadgeClass: Record<string, string> = {
@@ -52,6 +54,8 @@ function getDeviceIcon(assetType: string | null) {
     case 'tv': return <Tv className="w-8 h-8 text-purple-600" />
     case 'printer': return <Printer className="w-8 h-8 text-orange-600" />
     case 'server': return <Server className="w-8 h-8 text-red-600" />
+    case 'ssd':
+    case 'ram': return <HardDrive className="w-8 h-8 text-teal-600" />
     default: return <HardDrive className="w-8 h-8 text-gray-500" />
   }
 }
@@ -233,9 +237,21 @@ export default function DeviceDetailPage() {
                 <p className="text-lg text-gray-600 mb-3">
                   {device.asset_type ? ASSET_TYPE_LABELS[device.asset_type] : device.device_type || 'Unknown type'}
                 </p>
-                <span className={`px-4 py-1 rounded-full text-sm font-semibold border ${statusBadgeClass[device.status] || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
-                  {DEVICE_STATUS_LABELS[device.status] || device.status}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`px-4 py-1 rounded-full text-sm font-semibold border ${statusBadgeClass[device.status] || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+                    {DEVICE_STATUS_LABELS[device.status] || device.status}
+                  </span>
+                  {device.is_loaner && (
+                    <span className="px-4 py-1 rounded-full text-sm font-semibold border bg-indigo-100 text-indigo-800 border-indigo-200">
+                      Loaner
+                    </span>
+                  )}
+                  {isLoanerOverdue(device.loaner_due_date, Boolean(device.employee_id)) && (
+                    <span className="px-4 py-1 rounded-full text-sm font-semibold border bg-red-100 text-red-800 border-red-200">
+                      Overdue
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex gap-3">
@@ -269,6 +285,16 @@ export default function DeviceDetailPage() {
                   ? `${device.employee.display_name || device.employee.email}${device.employee.email && device.employee.display_name ? ` (${device.employee.email})` : ''}`
                   : 'Unassigned'}
               </div>
+              {device.is_loaner && device.employee_id && (
+                <div className={`text-sm mt-0.5 ${isLoanerOverdue(device.loaner_due_date, true) ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                  {device.loaner_checked_out_at && (
+                    <span>Checked out {fmtDate(device.loaner_checked_out_at)} · </span>
+                  )}
+                  {device.loaner_due_date
+                    ? `Due ${fmtDate(device.loaner_due_date)}`
+                    : 'No due date set'}
+                </div>
+              )}
             </div>
           </div>
 
@@ -378,6 +404,54 @@ export default function DeviceDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Loaner checkout history */}
+        {device.is_loaner && (device.loaner_checkouts?.length ?? 0) > 0 && (
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+            <div className="border-b border-gray-200 p-6">
+              <h2 className="text-2xl font-bold text-gray-900">Loaner checkout history</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Who borrowed this pool device, including people who have since left the company.
+              </p>
+            </div>
+            <div className="p-6 space-y-3">
+              {device.loaner_checkouts!.map((row) => {
+                const open = !row.returned_at
+                const overdue = isLoanerOverdue(row.due_date, open)
+                return (
+                  <div
+                    key={row.id}
+                    className={`flex items-center justify-between border rounded-lg p-4 ${
+                      open ? 'border-indigo-200 bg-indigo-50/40' : 'border-gray-200'
+                    }`}
+                  >
+                    <div>
+                      <h4 className="font-semibold text-gray-900">
+                        {row.employee_name || row.employee_email || 'Unknown borrower'}
+                      </h4>
+                      {row.employee_email && row.employee_name && (
+                        <p className="text-sm text-gray-500">{row.employee_email}</p>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-500 text-right">
+                      <div>Out: {fmtDate(row.checked_out_at, true)}</div>
+                      {row.due_date && (
+                        <div className={overdue ? 'text-red-600 font-medium' : ''}>
+                          Due: {fmtDate(row.due_date)}{overdue ? ' (overdue)' : ''}
+                        </div>
+                      )}
+                      {row.returned_at ? (
+                        <div>Returned: {fmtDate(row.returned_at, true)}</div>
+                      ) : (
+                        <div className="text-indigo-700 font-medium">Currently out</div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Assignment history */}
         {((device.current_users && device.current_users.length > 0) || (device.previous_users && device.previous_users.length > 0)) && (

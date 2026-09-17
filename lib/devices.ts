@@ -1,6 +1,33 @@
 import type { AssetType, DeviceStatus } from './types'
 
-export const ASSET_TYPES: AssetType[] = ['laptop', 'desktop', 'monitor', 'tv', 'printer', 'server', 'other']
+export const ASSET_TYPES: AssetType[] = [
+  'laptop',
+  'desktop',
+  'monitor',
+  'tv',
+  'printer',
+  'server',
+  'ssd',
+  'ram',
+  'other',
+]
+
+/** Types tracked as devices. SSD, RAM, and Other are purchase-lot only. */
+export const DEVICE_ASSET_TYPES: AssetType[] = [
+  'laptop',
+  'desktop',
+  'monitor',
+  'tv',
+  'printer',
+  'server',
+]
+
+export function deviceTypeSelectOptions(current?: string | null): AssetType[] {
+  if (current && ASSET_TYPES.includes(current as AssetType) && !DEVICE_ASSET_TYPES.includes(current as AssetType)) {
+    return [...DEVICE_ASSET_TYPES, current as AssetType]
+  }
+  return DEVICE_ASSET_TYPES
+}
 export const DEVICE_STATUSES: DeviceStatus[] = ['active', 'in_stock', 'repair', 'decommissioned']
 
 export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
@@ -10,6 +37,8 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   tv: 'TV',
   printer: 'Printer',
   server: 'Server',
+  ssd: 'SSD',
+  ram: 'RAM',
   other: 'Other',
 }
 
@@ -18,6 +47,49 @@ export const DEVICE_STATUS_LABELS: Record<DeviceStatus, string> = {
   in_stock: 'In Stock',
   repair: 'Repair',
   decommissioned: 'Decommissioned',
+}
+
+/**
+ * Status chips on `/devices`. `loaner` is a flag (`is_loaner`), not a
+ * mutually exclusive status, so a device can appear under both Loaner and
+ * Active / In Stock.
+ */
+export const DEVICE_STATUS_FILTERS = [
+  'active',
+  'in_stock',
+  'loaner',
+  'repair',
+  'decommissioned',
+] as const
+
+export type DeviceStatusFilter = (typeof DEVICE_STATUS_FILTERS)[number]
+
+export const DEVICE_STATUS_FILTER_LABELS: Record<DeviceStatusFilter, string> = {
+  ...DEVICE_STATUS_LABELS,
+  loaner: 'Loaner',
+}
+
+/** Value shown in the Status <select> (Loaner is a flag, not a DB status). */
+export function statusSelectValue(
+  status: string | null | undefined,
+  isLoaner: boolean | null | undefined
+): DeviceStatusFilter | string {
+  if (isLoaner) return 'loaner'
+  return status || 'in_stock'
+}
+
+/** Map a Status <select> choice back to devices.status + is_loaner. */
+export function applyStatusSelect(
+  value: string,
+  assigned: boolean
+): { status: DeviceStatus; is_loaner: boolean } {
+  if (value === 'loaner') {
+    return { status: assigned ? 'active' : 'in_stock', is_loaner: true }
+  }
+  if (!DEVICE_STATUSES.includes(value as DeviceStatus)) {
+    return { status: 'in_stock', is_loaner: false }
+  }
+  return { status: value as DeviceStatus, is_loaner: false }
 }
 
 /**
@@ -125,7 +197,12 @@ const EDITABLE_FIELDS = [
   'warranty_end',
   'notes',
   'status',
+  'is_loaner',
+  'loaner_due_date',
+  'loaner_checked_out_at',
   'employee_id',
+  'not_from_stock',
+  'stock_lot_id',
 ] as const
 
 /**
@@ -143,6 +220,42 @@ export async function closeCurrentAssignments(
     .update({ is_current: false, unassignment_date: unassignmentDate })
     .eq('device_id', deviceId)
     .eq('is_current', true)
+}
+
+/** Insert an assignment-history row with a name/email snapshot for offboarding. */
+export async function insertAssignmentHistory(
+  supabase: { from: (table: string) => any },
+  opts: {
+    deviceId: string
+    employeeId: string
+    assignmentDate?: string
+    snapshot?: { name: string | null; email: string | null }
+  }
+) {
+  let snapshot = opts.snapshot
+  if (!snapshot) {
+    const { data } = await supabase
+      .from('employees')
+      .select('display_name, first_name, last_name, email')
+      .eq('id', opts.employeeId)
+      .maybeSingle()
+    snapshot = {
+      name:
+        data?.display_name ||
+        `${data?.first_name || ''} ${data?.last_name || ''}`.trim() ||
+        data?.email ||
+        null,
+      email: data?.email || null,
+    }
+  }
+  return supabase.from('device_assignments_history').insert({
+    device_id: opts.deviceId,
+    employee_id: opts.employeeId,
+    assignment_date: opts.assignmentDate || new Date().toISOString(),
+    is_current: true,
+    employee_name: snapshot.name,
+    employee_email: snapshot.email,
+  })
 }
 
 /**
@@ -171,6 +284,12 @@ export function sanitizeDeviceBody(body: Record<string, unknown>) {
   }
   if ('status' in out && !DEVICE_STATUSES.includes(out.status as DeviceStatus)) {
     throw new Error(`Invalid status. Must be one of: ${DEVICE_STATUSES.join(', ')}`)
+  }
+  if ('is_loaner' in out) {
+    out.is_loaner = Boolean(out.is_loaner)
+  }
+  if ('not_from_stock' in out) {
+    out.not_from_stock = Boolean(out.not_from_stock)
   }
   return out
 }

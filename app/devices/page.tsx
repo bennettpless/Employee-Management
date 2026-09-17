@@ -10,17 +10,58 @@ import {
 import { format } from 'date-fns'
 import { Device } from '@/lib/types'
 import {
-  ASSET_TYPES,
+  DEVICE_ASSET_TYPES,
   ASSET_TYPE_LABELS,
-  DEVICE_STATUSES,
   DEVICE_STATUS_LABELS,
+  DEVICE_STATUS_FILTERS,
+  DEVICE_STATUS_FILTER_LABELS,
   formatMakeModel,
 } from '@/lib/devices'
-import type { OnboardingSyncResult } from '@/lib/sync-review'
+import {
+  draftsForPendingOnly,
+  loadPendingSyncReview,
+  mergeSyncReviewItems,
+  savePendingSyncReview,
+  type OnboardingSyncResult,
+  type SyncReviewDraft,
+  type SyncReviewItem,
+} from '@/lib/sync-review'
+import { isLoanerOverdue } from '@/lib/loaner-checkout'
 import DeviceFormModal from '@/components/devices/DeviceFormModal'
 import SyncReviewModal from '@/components/devices/SyncReviewModal'
 
 type SortKey = 'device_name' | 'asset_tag' | 'asset_type' | 'make_model' | 'serial_number' | 'assigned' | 'department' | 'location' | 'status' | 'warranty_end'
+
+const DEVICES_LIST_STATE_KEY = 'ems-devices-list-state'
+
+interface DevicesListState {
+  searchTerm: string
+  statusFilter: string
+  typeFilter: string
+  departmentFilter: string
+  locationFilter: string
+  sortKey: SortKey
+  sortAsc: boolean
+}
+
+function readDevicesListState(): Partial<DevicesListState> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.sessionStorage.getItem(DEVICES_LIST_STATE_KEY)
+    if (!raw) return {}
+    return JSON.parse(raw) as Partial<DevicesListState>
+  } catch {
+    return {}
+  }
+}
+
+function writeDevicesListState(state: DevicesListState) {
+  try {
+    window.sessionStorage.setItem(DEVICES_LIST_STATE_KEY, JSON.stringify(state))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
 
 const statusBadgeClass: Record<string, string> = {
   active: 'bg-green-100 text-green-800',
@@ -29,14 +70,46 @@ const statusBadgeClass: Record<string, string> = {
   decommissioned: 'bg-gray-200 text-gray-700',
 }
 
+const LOANER_BADGE_CLASS = 'bg-indigo-100 text-indigo-800'
+
+function StatusBadges({
+  status,
+  isLoaner,
+  overdue,
+}: {
+  status: string
+  isLoaner?: boolean
+  overdue?: boolean
+}) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1 max-w-full">
+      <span className={`inline-block max-w-full truncate px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadgeClass[status] || 'bg-gray-100 text-gray-800'}`}>
+        {DEVICE_STATUS_LABELS[status as keyof typeof DEVICE_STATUS_LABELS] || status}
+      </span>
+      {isLoaner && (
+        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${LOANER_BADGE_CLASS}`}>
+          Loaner
+        </span>
+      )}
+      {overdue && (
+        <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+          Overdue
+        </span>
+      )}
+    </span>
+  )
+}
+
 function getDeviceIcon(assetType: string | null) {
   switch (assetType) {
     case 'laptop': return <Laptop className="w-4 h-4 text-blue-600" />
     case 'desktop': return <Monitor className="w-4 h-4 text-indigo-600" />
     case 'monitor': return <Monitor className="w-4 h-4 text-cyan-600" />
     case 'tv': return <Tv className="w-4 h-4 text-purple-600" />
-    case 'printer': return <Printer className="w-4 h-4 text-orange-600" />
+            case 'printer': return <Printer className="w-4 h-4 text-orange-600" />
     case 'server': return <Server className="w-4 h-4 text-red-600" />
+    case 'ssd':
+    case 'ram': return <HardDrive className="w-4 h-4 text-teal-600" />
     default: return <HardDrive className="w-4 h-4 text-gray-500" />
   }
 }
@@ -60,10 +133,12 @@ export default function DevicesPage() {
   const [flaggedLocations, setFlaggedLocations] = useState<string[]>([])
   const [sortKey, setSortKey] = useState<SortKey>('device_name')
   const [sortAsc, setSortAsc] = useState(true)
+  const [listReady, setListReady] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<OnboardingSyncResult | null>(null)
   const [showSyncReview, setShowSyncReview] = useState(false)
+  const [pendingDrafts, setPendingDrafts] = useState<Record<string, SyncReviewDraft>>({})
 
   const fetchDevices = useCallback(async (opts?: { quiet?: boolean }) => {
     try {
@@ -92,8 +167,46 @@ export default function DevicesPage() {
   }, [statusFilter, typeFilter, departmentFilter, locationFilter])
 
   useEffect(() => {
+    const saved = readDevicesListState()
+    if (typeof saved.searchTerm === 'string') setSearchTerm(saved.searchTerm)
+    if (typeof saved.statusFilter === 'string') setStatusFilter(saved.statusFilter)
+    if (typeof saved.typeFilter === 'string' && DEVICE_ASSET_TYPES.includes(saved.typeFilter as (typeof DEVICE_ASSET_TYPES)[number])) {
+      setTypeFilter(saved.typeFilter)
+    }
+    if (typeof saved.departmentFilter === 'string') setDepartmentFilter(saved.departmentFilter)
+    if (typeof saved.locationFilter === 'string') setLocationFilter(saved.locationFilter)
+    if (typeof saved.sortKey === 'string') setSortKey(saved.sortKey as SortKey)
+    if (typeof saved.sortAsc === 'boolean') setSortAsc(saved.sortAsc)
+    setListReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!listReady) return
+    writeDevicesListState({
+      searchTerm,
+      statusFilter,
+      typeFilter,
+      departmentFilter,
+      locationFilter,
+      sortKey,
+      sortAsc,
+    })
+  }, [listReady, searchTerm, statusFilter, typeFilter, departmentFilter, locationFilter, sortKey, sortAsc])
+
+  useEffect(() => {
+    if (!listReady) return
     fetchDevices()
-  }, [fetchDevices])
+  }, [fetchDevices, listReady])
+
+  useEffect(() => {
+    const pending = loadPendingSyncReview()
+    if (!pending?.items.length) return
+    setPendingDrafts(pending.drafts || {})
+    setSyncResult({
+      success: true,
+      review: { items: pending.items },
+    })
+  }, [])
 
   // Browser back / bfcache can restore this page with stale React state after
   // editing a device on /devices/[id]. Quiet-refetch when the page is shown again.
@@ -112,19 +225,46 @@ export default function DevicesPage() {
     }
   }, [fetchDevices])
 
+  const writePendingReview = useCallback(
+    (remaining: SyncReviewItem[], drafts: Record<string, SyncReviewDraft>) => {
+      setPendingDrafts(drafts)
+      if (remaining.length === 0) {
+        savePendingSyncReview(null)
+        return
+      }
+      savePendingSyncReview({
+        items: remaining,
+        drafts,
+        savedAt: new Date().toISOString(),
+      })
+    },
+    []
+  )
+
   const handleOnboardingSync = async () => {
     if (syncing) return
     setSyncing(true)
-    setSyncResult(null)
     setShowSyncReview(false)
     try {
+      const pending = loadPendingSyncReview()
       const response = await fetch('/api/sync/onboarding', { method: 'POST' })
       const result: OnboardingSyncResult = await response.json()
       if (!response.ok) throw new Error(result.error || 'Sync failed')
-      setSyncResult(result)
+      const incoming = result.review?.items ?? []
+      const merged = mergeSyncReviewItems(incoming, pending?.items ?? [])
+      const keptDrafts = draftsForPendingOnly(
+        incoming.map((item) => item.id),
+        pending?.drafts
+      )
+      setPendingDrafts(keptDrafts)
+      const nextResult = { ...result, review: { items: merged } }
+      setSyncResult(nextResult)
       await fetchDevices()
-      if ((result.review?.items?.length ?? 0) > 0) {
+      if (merged.length > 0) {
+        writePendingReview(merged, keptDrafts)
         setShowSyncReview(true)
+      } else {
+        savePendingSyncReview(null)
       }
     } catch (error: any) {
       alert(`Onboarding/offboarding sync failed: ${error.message}`)
@@ -133,10 +273,38 @@ export default function DevicesPage() {
     }
   }
 
-  const closeSyncReview = async () => {
+  const deferSyncReview = (
+    remaining: SyncReviewItem[],
+    drafts: Record<string, SyncReviewDraft>
+  ) => {
+    writePendingReview(remaining, drafts)
     setShowSyncReview(false)
-    setSyncResult(null)
-    await fetchDevices()
+    setSyncResult((prev) =>
+      prev
+        ? { ...prev, review: { items: remaining } }
+        : { success: true, review: { items: remaining } }
+    )
+    void fetchDevices()
+  }
+
+  const completeSyncReview = () => {
+    writePendingReview([], {})
+    setShowSyncReview(false)
+    setSyncResult((prev) => (prev ? { ...prev, review: { items: [] } } : null))
+    void fetchDevices()
+  }
+
+  const resumeSyncReview = () => {
+    const pending = loadPendingSyncReview()
+    const items = pending?.items ?? syncResult?.review?.items ?? []
+    if (items.length === 0) return
+    if (pending?.drafts) setPendingDrafts(pending.drafts)
+    setSyncResult((prev) =>
+      prev
+        ? { ...prev, review: { items } }
+        : { success: true, review: { items } }
+    )
+    setShowSyncReview(true)
   }
 
   const filteredDevices = useMemo(() => {
@@ -291,8 +459,31 @@ export default function DevicesPage() {
           </div>
         </div>
 
-        {/* Compact banner only when sync had no review items (modal handles the happy path) */}
-        {syncResult && !showSyncReview && (
+        {Boolean(syncResult?.review?.items?.length) && !showSyncReview && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold text-amber-900 mb-1">Unfinished sync review</p>
+                <p className="text-amber-800">
+                  {syncResult!.review!.items.length}{' '}
+                  {syncResult!.review!.items.length === 1 ? 'item still needs' : 'items still need'}{' '}
+                  confirmation (including lot / Not from stock). Syncing again will keep these in the
+                  queue.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={resumeSyncReview}
+                className="px-3 py-1.5 bg-amber-700 text-white rounded-lg hover:bg-amber-800 whitespace-nowrap"
+              >
+                Resume
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Compact banner only when sync had no remaining review items */}
+        {syncResult && !showSyncReview && !(syncResult.review?.items?.length) && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -363,7 +554,7 @@ export default function DevicesPage() {
             All
             <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-black/10">{counts.all ?? 0}</span>
           </button>
-          {DEVICE_STATUSES.map((s) => (
+          {DEVICE_STATUS_FILTERS.map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
@@ -371,10 +562,21 @@ export default function DevicesPage() {
                 statusFilter === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
               }`}
             >
-              {DEVICE_STATUS_LABELS[s]}
+              {DEVICE_STATUS_FILTER_LABELS[s]}
               <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-black/10">{counts[s] ?? 0}</span>
             </button>
           ))}
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'overdue' ? '' : 'overdue')}
+            className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
+              statusFilter === 'overdue'
+                ? 'bg-red-600 text-white border-red-600'
+                : 'bg-white text-red-700 border-red-300 hover:bg-red-50'
+            }`}
+          >
+            Overdue
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-black/10">{counts.overdue ?? 0}</span>
+          </button>
         </div>
 
         {/* Search + filters */}
@@ -392,7 +594,7 @@ export default function DevicesPage() {
             </div>
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectClass}>
               <option value="">All Types</option>
-              {ASSET_TYPES.map((t) => (
+              {DEVICE_ASSET_TYPES.map((t) => (
                 <option key={t} value={t}>{ASSET_TYPE_LABELS[t]}</option>
               ))}
             </select>
@@ -514,6 +716,17 @@ export default function DevicesPage() {
                           title={device.employee.display_name || device.employee.email}
                         >
                           {device.employee.display_name || device.employee.email}
+                          {device.is_loaner && device.loaner_due_date && (
+                            <span
+                              className={`block text-xs font-normal ${
+                                isLoanerOverdue(device.loaner_due_date, true)
+                                  ? 'text-red-600'
+                                  : 'text-gray-500'
+                              }`}
+                            >
+                              Due {format(new Date(`${device.loaner_due_date}T00:00:00`), 'MMM d, yyyy')}
+                            </span>
+                          )}
                         </span>
                       ) : (
                         <span className="text-gray-400">Unassigned</span>
@@ -564,9 +777,11 @@ export default function DevicesPage() {
                       )}
                     </td>
                     <td className="px-2.5 py-2.5">
-                      <span className={`inline-block max-w-full truncate px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadgeClass[device.status] || 'bg-gray-100 text-gray-800'}`}>
-                        {DEVICE_STATUS_LABELS[device.status] || device.status}
-                      </span>
+                      <StatusBadges
+                        status={device.status}
+                        isLoaner={device.is_loaner}
+                        overdue={isLoanerOverdue(device.loaner_due_date, Boolean(device.employee_id))}
+                      />
                     </td>
                     <td className="px-2.5 py-2.5 text-sm text-gray-700 whitespace-nowrap">
                       {device.warranty_end ? format(new Date(`${device.warranty_end}T00:00:00`), 'MMM d, yyyy') : '—'}
@@ -594,8 +809,10 @@ export default function DevicesPage() {
         <SyncReviewModal
           result={syncResult}
           locations={locations}
-          onClose={closeSyncReview}
-          onSaved={closeSyncReview}
+          initialDrafts={pendingDrafts}
+          onSavePending={writePendingReview}
+          onDefer={deferSyncReview}
+          onComplete={completeSyncReview}
         />
       )}
     </div>

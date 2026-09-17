@@ -88,7 +88,7 @@ If the dev server starts without errors, you're ready to proceed.
    - network_device_connections
    - office_connections
 
-(Also apply everything under `supabase/migrations/` — the base `schema.sql` plus migrations together produce the complete schema.)
+(Also apply everything under `supabase/migrations/` — the base `schema.sql` plus migrations together produce the complete schema. Phase 28 adds `app_user_roles`, `asset_purchase_lots`, and `asset_allocations` in `15_asset_stock_tracker.sql`.)
 
 ## Microsoft Azure / SharePoint Setup
 
@@ -214,10 +214,6 @@ NINJA_CLIENT_ID=
 NINJA_CLIENT_SECRET=
 NINJA_REGION=us
 
-# IT Response Agent (Phase 11)
-IT_RESPONSE_AGENT_URL=https://app-itticketagent-api-prod.azurewebsites.net
-IT_RESPONSE_AGENT_API_KEY=
-
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 SYNC_CRON_SECRET=
@@ -287,65 +283,10 @@ NINJA_CLIENT_ID=a1b2c3d4e5f6g7h8i9j0
 NINJA_CLIENT_SECRET=AbC123-DeF456_GhI789-JkL012
 NINJA_REGION=us
 
-# IT Response Agent (Phase 11)
-IT_RESPONSE_AGENT_URL=https://app-itticketagent-api-prod.azurewebsites.net
-IT_RESPONSE_AGENT_API_KEY=your-shared-agent-api-key
-
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 SYNC_CRON_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 ```
-
-## IT Response Agent Setup (Phase 11)
-
-The Employee Management System embeds the [IT Response Agent](https://github.com/bennettpless/IT-Response-Agent)'s review dashboard at `/response-agent` and shows a live "pending review" badge on the home page via the agent's `embed.js` script. Two env vars are required.
-
-### Step 1: Deploy or locate the IT Response Agent
-
-You need a reachable IT Response Agent server (Express.js + Azure Postgres). The default deployment URL used by this organization is:
-
-```
-https://app-itticketagent-api-prod.azurewebsites.net
-```
-
-If you're using a different deployment, substitute your URL throughout this section.
-
-### Step 2: Get the AGENT_API_KEY
-
-The IT Response Agent server requires an `X-API-Key` header on every request. The value lives on the agent server as `AGENT_API_KEY` (in Azure App Service config or wherever the agent is hosted). Copy that value — you'll paste it into EMS as `IT_RESPONSE_AGENT_API_KEY`.
-
-### Step 3: Add the env vars to EMS
-
-Add both vars to `.env.local` (and to the production Web App's application settings in Azure — already done for `app-ems-bp-prod`):
-
-```bash
-IT_RESPONSE_AGENT_URL=https://app-itticketagent-api-prod.azurewebsites.net
-IT_RESPONSE_AGENT_API_KEY=<paste AGENT_API_KEY from the agent server>
-```
-
-These are validated at startup by `lib/env.ts` — the app will refuse to boot if either is missing.
-
-### Step 4: Set PORTAL_ORIGIN on the IT Response Agent server
-
-This is a one-time change on the **IT Response Agent** deployment (not EMS). The agent uses `PORTAL_ORIGIN` to allow the EMS app to embed `review.html` via iframe and call its API from `embed.js`.
-
-On the agent server (Azure App Service > Configuration > Application settings), set:
-
-```
-PORTAL_ORIGIN=https://app-ems-bp-prod.azurewebsites.net,http://localhost:3000
-```
-
-Restart the agent after changing this. **This is already done for the current production deployment** (2026-08-11) — it only needs touching again if the EMS origin changes.
-
-### Step 5: Verify
-
-After `npm run dev`:
-
-- Visit `/` — the IT Response Agent card should appear in the grid
-- If there are pending recommendations, a rose-colored badge with the count appears in the card header
-- Click the card — `/response-agent` loads the agent's `review.html` in a full-height iframe
-- If the iframe is blank or the badge never appears, check the browser console for CORS errors (means `PORTAL_ORIGIN` is wrong on the agent)
-- If you see "IT Response Agent not configured" on `/response-agent`, the env vars aren't set
 
 ## First Data Sync
 
@@ -409,7 +350,6 @@ The app is standard Next.js 14 — `npm run build` + `npm start` on any Node 20+
 
 1. Set all required environment variables (see [`.env.example`](./.env.example))
 2. Add the new origin to the Azure AD App Registration redirect URIs: `<your-origin>/api/auth/callback/azure-ad`
-3. Update `PORTAL_ORIGIN` on the IT Response Agent server to include the new origin
 
 ## Troubleshooting
 

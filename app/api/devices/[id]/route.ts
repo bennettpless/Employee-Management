@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
-import { closeCurrentAssignments, sanitizeDeviceBody } from '@/lib/devices'
+import { closeCurrentAssignments, insertAssignmentHistory, sanitizeDeviceBody } from '@/lib/devices'
 import { currentActor, logAudit } from '@/lib/audit'
+import {
+  closeOpenLoanerCheckouts,
+  employeeSnapshotFrom,
+  fetchEmployeeSnapshot,
+  loanerFieldsForAssignment,
+  openLoanerCheckout,
+} from '@/lib/loaner-checkout'
+import { consumeSkipError, parseChargeOfficeInput } from '@/lib/stock-tracker'
+import { maybeConsumeStockLot, requireChargeOffice, setDeviceNotFromStock } from '@/lib/stock-consume'
 
 export async function GET(
   request: NextRequest,
@@ -37,12 +46,20 @@ export async function GET(
       .order('event_date', { ascending: false })
       .order('created_at', { ascending: false })
 
+    const { data: loanerCheckouts } = await supabase
+      .from('loaner_checkouts')
+      .select('*')
+      .eq('device_id', device.id)
+      .order('checked_out_at', { ascending: false })
+
     // Get device assignment history (current and previous users)
     const { data: assignmentHistory } = await supabase
       .from('device_assignments_history')
       .select(`
         id,
         employee_id,
+        employee_name,
+        employee_email,
         employee:employees(
           id,
           display_name,
@@ -82,14 +99,28 @@ export async function GET(
       }
     }
 
+    const assignmentPerson = (a: any) => {
+      if (a.employee) return a.employee
+      if (a.employee_name || a.employee_email) {
+        return {
+          id: a.employee_id,
+          display_name: a.employee_name,
+          email: a.employee_email || '',
+          first_name: null,
+          last_name: null,
+        }
+      }
+      return null
+    }
+
     const currentAssignments = (assignmentHistory || []).filter(
       (a: any) =>
         a.is_current &&
-        a.employee &&
+        assignmentPerson(a) &&
         a.employee_id === device.employee_id
     )
     const previousAssignments = (assignmentHistory || []).filter(
-      (a: any) => !a.is_current && a.employee
+      (a: any) => !a.is_current && assignmentPerson(a)
     )
 
     previousAssignments.sort((a: any, b: any) => {
@@ -103,16 +134,17 @@ export async function GET(
         ...device,
         history: history || [],
         current_users: currentAssignments.map((a: any) => ({
-          employee: a.employee,
+          employee: assignmentPerson(a),
           assignment_date: a.assignment_date,
           registered_date: a.registered_date
         })),
         previous_users: previousAssignments.map((a: any) => ({
-          employee: a.employee,
+          employee: assignmentPerson(a),
           assignment_date: a.assignment_date,
           unassignment_date: a.unassignment_date,
           registered_date: a.registered_date
-        }))
+        })),
+        loaner_checkouts: loanerCheckouts || [],
       }
     })
   } catch (error: any) {
@@ -156,6 +188,26 @@ export async function PATCH(
     const assigneeChanging =
       'employee_id' in updateData && updateData.employee_id !== existing.employee_id
 
+    const nextIsLoaner =
+      'is_loaner' in updateData ? Boolean(updateData.is_loaner) : Boolean(existing.is_loaner)
+    const nextEmployeeId = (
+      'employee_id' in updateData ? updateData.employee_id : existing.employee_id
+    ) as string | null
+    const nextDue = (
+      'loaner_due_date' in updateData ? updateData.loaner_due_date : existing.loaner_due_date
+    ) as string | null
+
+    const loanerNext = loanerFieldsForAssignment({
+      isLoaner: nextIsLoaner,
+      nextEmployeeId,
+      dueDate: nextDue,
+      existingCheckedOutAt: existing.loaner_checked_out_at,
+      assigneeChanging: assigneeChanging || (!existing.employee_id && Boolean(nextEmployeeId)),
+      becomingLoaner: nextIsLoaner && !existing.is_loaner,
+    })
+    updateData.loaner_due_date = loanerNext.loaner_due_date
+    updateData.loaner_checked_out_at = loanerNext.loaner_checked_out_at
+
     const { data: device, error } = await supabase
       .from('devices')
       .update(updateData)
@@ -176,19 +228,83 @@ export async function PATCH(
       throw error
     }
 
+    let stockLotPrompt = undefined as Awaited<ReturnType<typeof maybeConsumeStockLot>>['prompt']
+    const lotId = body.lot_id ? String(body.lot_id) : null
+    const notFromStock = Boolean(body.not_from_stock)
+    let chargeOffice: string | null = null
+    const willAssign = Boolean(nextEmployeeId)
+    const taggedLot = lotId || existing.stock_lot_id || null
+    if (taggedLot && !notFromStock && willAssign) {
+      const charge = await requireChargeOffice(parseChargeOfficeInput(body), supabase)
+      if (!charge.ok) {
+        return NextResponse.json({ error: charge.error }, { status: 400 })
+      }
+      chargeOffice = charge.office
+    }
+
     if (assigneeChanging) {
       const now = new Date().toISOString()
-      // Close every open history row for this device (not just the prior
-      // employee_id) so stale is_current rows can't linger.
       await closeCurrentAssignments(supabase, params.id, now)
       if (updateData.employee_id) {
-        await supabase.from('device_assignments_history').insert({
-          device_id: params.id,
-          employee_id: updateData.employee_id,
-          assignment_date: now,
-          is_current: true,
+        await insertAssignmentHistory(supabase, {
+          deviceId: params.id,
+          employeeId: updateData.employee_id as string,
+          assignmentDate: now,
+          snapshot: employeeSnapshotFrom(device.employee),
         })
+        const consume = await maybeConsumeStockLot(supabase, {
+          device: existing,
+          nextEmployeeId: updateData.employee_id as string,
+          actor: await currentActor(),
+          lotId,
+          notFromStock,
+          chargeOffice,
+        })
+        const skipError = consumeSkipError(consume.skipped)
+        if (skipError) {
+          return NextResponse.json({ error: skipError }, { status: 400 })
+        }
+        stockLotPrompt = consume.prompt
       }
+    } else if (lotId && !notFromStock) {
+      const consume = await maybeConsumeStockLot(supabase, {
+        device: existing,
+        nextEmployeeId: nextEmployeeId,
+        actor: await currentActor(),
+        force: true,
+        lotId,
+        notFromStock: false,
+        chargeOffice,
+      })
+      const skipError = consumeSkipError(consume.skipped)
+      if (skipError) {
+        return NextResponse.json({ error: skipError }, { status: 400 })
+      }
+      stockLotPrompt = consume.prompt
+    } else if (notFromStock) {
+      await setDeviceNotFromStock(supabase, params.id, true)
+    }
+
+    if (loanerNext.shouldCloseCheckout) {
+      await closeOpenLoanerCheckouts(supabase, params.id)
+    } else if (loanerNext.shouldOpenCheckout) {
+      let snapshot = employeeSnapshotFrom(device.employee)
+      if (!snapshot.name && !snapshot.email) {
+        snapshot = await fetchEmployeeSnapshot(supabase, nextEmployeeId)
+      }
+      await openLoanerCheckout(supabase, {
+        deviceId: params.id,
+        employeeId: nextEmployeeId,
+        snapshot,
+        dueDate: loanerNext.loaner_due_date,
+        checkedOutAt: loanerNext.loaner_checked_out_at || undefined,
+      })
+    } else if (nextIsLoaner && nextEmployeeId && nextDue !== existing.loaner_due_date) {
+      await supabase
+        .from('loaner_checkouts')
+        .update({ due_date: loanerNext.loaner_due_date })
+        .eq('device_id', params.id)
+        .is('returned_at', null)
     }
 
     // Audit: log only fields that actually changed
@@ -214,7 +330,7 @@ export async function PATCH(
       })
     }
 
-    return NextResponse.json({ device })
+    return NextResponse.json({ device, stock_lot: stockLotPrompt || null })
   } catch (error: any) {
     console.error('Error updating device:', error)
     return NextResponse.json(
