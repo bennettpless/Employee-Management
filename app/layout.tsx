@@ -9,7 +9,7 @@ import '@xyflow/react/dist/style.css'
 const fontClass = 'font-sans'
 
 export const metadata: Metadata = {
-  title: 'Employee Management System',
+  title: 'Asset Tracking System',
   description: 'Employee management with SharePoint Excel, NinjaOne, and Supabase',
 }
 

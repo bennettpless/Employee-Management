@@ -76,8 +76,7 @@ export default function AccessRoleLists() {
     <div className="mt-8">
       <h2 className="text-lg font-semibold text-gray-900 mb-2">Access</h2>
       <p className="text-sm text-gray-600 mb-4">
-        Only emails on the Admin list can sign in. Accounting receives the month-end stock-history
-        email and does not log in to EMS.
+        Only emails on the Admin list can sign in.
       </p>
       {error && (
         <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
@@ -92,10 +91,7 @@ export default function AccessRoleLists() {
       ) : (
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900">Admin</h3>
-            <p className="text-sm text-gray-600 mt-1 mb-4">
-              IT — full access, including this Settings page.
-            </p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin</h3>
             <ul className="divide-y divide-gray-100 mb-4">
               {admins.length === 0 && <li className="py-2 text-sm text-gray-400">None yet</li>}
               {admins.map((row) => (

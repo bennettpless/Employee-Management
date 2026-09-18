@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Plus, Pencil, Package } from 'lucide-react'
+import Link from 'next/link'
+import { FileSpreadsheet, Loader2, Plus, Pencil, Package } from 'lucide-react'
 import PurchaseLotModal from '@/components/stock/PurchaseLotModal'
 import { ASSET_TYPE_LABELS, officeNameToLocation } from '@/lib/devices'
 import { candidateLotsForPrompt, formatLotOptionLabel, formatUsd, type LotWithMetrics } from '@/lib/stock-tracker'
@@ -111,14 +112,23 @@ export default function StockPage() {
               Returning a device to stock does not add quantity back.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setModalLot(null)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md"
-          >
-            <Plus className="w-4 h-4" />
-            Add purchase
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/stock/reports"
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Reports
+            </Link>
+            <button
+              type="button"
+              onClick={() => setModalLot(null)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md"
+            >
+              <Plus className="w-4 h-4" />
+              Add purchase
+            </button>
+          </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4 mb-6">

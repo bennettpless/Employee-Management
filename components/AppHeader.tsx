@@ -10,10 +10,9 @@ import {
   LogOut,
   Menu,
   X,
-  ScrollText,
   Users,
   Package,
-  FileSpreadsheet,
+  HelpCircle,
 } from 'lucide-react'
 import { useState } from 'react'
 import { canAccessNetwork } from '@/lib/network-access'
@@ -23,10 +22,9 @@ const itNavItems = [
   { href: '/employees', label: 'Employees', icon: Users },
   { href: '/devices', label: 'Devices', icon: Server },
   { href: '/stock', label: 'Stock', icon: Package },
-  { href: '/stock/reports', label: 'Reports', icon: FileSpreadsheet },
   { href: '/network', label: 'Network', icon: Network },
-  { href: '/audit', label: 'Audit', icon: ScrollText },
   { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/faq', label: 'FAQ', icon: HelpCircle },
 ]
 
 export default function AppHeader() {
@@ -42,7 +40,6 @@ export default function AppHeader() {
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
-    if (href === '/stock') return pathname === '/stock'
     return pathname.startsWith(href)
   }
 

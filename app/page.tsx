@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { getServerSession } from 'next-auth/next'
-import { Server, Network, Settings, Users, Package } from 'lucide-react'
+import { Server, Network, Settings, Users, Package, HelpCircle } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import { canAccessNetwork } from '@/lib/network-access'
 
@@ -14,19 +14,19 @@ export default async function Home() {
         {/* Header */}
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            Employee Management System
+            Asset Tracking System
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             {showNetwork
-              ? 'Unified employee, device, and network inventory across all 11 offices. Track who has what equipment and how every site is wired together.'
-              : 'Unified employee and device inventory across all 11 offices. Track who has what equipment.'}
+              ? 'Unified employee, device, and network inventory across all offices. Track who has what equipment and how every site is wired together.'
+              : 'Unified employee and device inventory across all offices. Track who has what equipment.'}
           </p>
         </div>
 
         {/* Feature Cards */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-          <Link href="/employees" className="group">
-            <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-blue-500">
+          <Link href="/employees" className="group block h-full">
+            <div className="h-full bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-blue-500">
               <div className="flex items-center mb-4">
                 <div className="bg-blue-100 rounded-lg p-3 group-hover:bg-blue-500 transition-colors duration-300">
                   <Users className="w-8 h-8 text-blue-600 group-hover:text-white" />
@@ -39,8 +39,8 @@ export default async function Home() {
             </div>
           </Link>
 
-          <Link href="/devices" className="group">
-            <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-green-500">
+          <Link href="/devices" className="group block h-full">
+            <div className="h-full bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-green-500">
               <div className="flex items-center mb-4">
                 <div className="bg-green-100 rounded-lg p-3 group-hover:bg-green-500 transition-colors duration-300">
                   <Server className="w-8 h-8 text-green-600 group-hover:text-white" />
@@ -53,8 +53,8 @@ export default async function Home() {
             </div>
           </Link>
 
-          <Link href="/stock" className="group">
-            <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-amber-500">
+          <Link href="/stock" className="group block h-full">
+            <div className="h-full bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-amber-500">
               <div className="flex items-center mb-4">
                 <div className="bg-amber-100 rounded-lg p-3 group-hover:bg-amber-500 transition-colors duration-300">
                   <Package className="w-8 h-8 text-amber-600 group-hover:text-white" />
@@ -68,8 +68,8 @@ export default async function Home() {
           </Link>
 
           {showNetwork && (
-          <Link href="/network" className="group">
-            <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-purple-500">
+          <Link href="/network" className="group block h-full">
+            <div className="h-full bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-purple-500">
               <div className="flex items-center mb-4">
                 <div className="bg-purple-100 rounded-lg p-3 group-hover:bg-purple-500 transition-colors duration-300">
                   <Network className="w-8 h-8 text-purple-600 group-hover:text-white" />
@@ -77,14 +77,14 @@ export default async function Home() {
                 <h2 className="text-2xl font-bold text-gray-900 ml-4">Network</h2>
               </div>
               <p className="text-gray-600">
-                Geographic map of all 11 offices and per-office topology of switches, access points, firewalls, and servers.
+                Geographic map of all offices and per-office topology of switches, access points, firewalls, and servers.
               </p>
             </div>
           </Link>
           )}
 
-          <Link href="/settings" className="group">
-            <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-gray-500">
+          <Link href="/settings" className="group block h-full">
+            <div className="h-full bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-gray-500">
               <div className="flex items-center mb-4">
                 <div className="bg-gray-100 rounded-lg p-3 group-hover:bg-gray-500 transition-colors duration-300">
                   <Settings className="w-8 h-8 text-gray-600 group-hover:text-white" />
@@ -96,71 +96,20 @@ export default async function Home() {
               </p>
             </div>
           </Link>
-        </div>
 
-        {/* Key Features Section */}
-        <div className="bg-white rounded-xl shadow-lg p-8 mt-12">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6">Key Features</h3>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="flex items-start">
-              <div className="bg-blue-100 rounded-lg p-2 mr-4">
-                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+          <Link href="/faq" className="group block h-full">
+            <div className="h-full bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border-2 border-transparent hover:border-indigo-500">
+              <div className="flex items-center mb-4">
+                <div className="bg-indigo-100 rounded-lg p-3 group-hover:bg-indigo-500 transition-colors duration-300">
+                  <HelpCircle className="w-8 h-8 text-indigo-600 group-hover:text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 ml-4">FAQ</h2>
               </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Onboarding / Offboarding Sync</h4>
-                <p className="text-gray-600 text-sm">One click pulls new hires and terminations from the SharePoint onboarding workbook</p>
-              </div>
+              <p className="text-gray-600">
+                How sign-in, sync, stock lots, and reports work.
+              </p>
             </div>
-            <div className="flex items-start">
-              <div className="bg-blue-100 rounded-lg p-2 mr-4">
-                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Device Inventory</h4>
-                <p className="text-gray-600 text-sm">Asset tags, serials, warranties, assignments, and repair/upgrade history per device</p>
-              </div>
-            </div>
-            <div className="flex items-start">
-              <div className="bg-blue-100 rounded-lg p-2 mr-4">
-                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Advanced Filtering</h4>
-                <p className="text-gray-600 text-sm">Filter devices by type, status, department, and location</p>
-              </div>
-            </div>
-            {showNetwork && (
-            <div className="flex items-start">
-              <div className="bg-blue-100 rounded-lg p-2 mr-4">
-                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Network Inventory</h4>
-                <p className="text-gray-600 text-sm">Switches, APs, firewalls, and servers tracked per office with topology diagrams</p>
-              </div>
-            </div>
-            )}
-            <div className="flex items-start">
-              <div className="bg-blue-100 rounded-lg p-2 mr-4">
-                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Automated Updates</h4>
-                <p className="text-gray-600 text-sm">Keep employee status up-to-date with new hires and terminations</p>
-              </div>
-            </div>
-            {showNetwork && (
-            <div className="flex items-start">
-              <div className="bg-blue-100 rounded-lg p-2 mr-4">
-                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Geographic Map</h4>
-                <p className="text-gray-600 text-sm">See all offices on a single map with device counts and links into each site</p>
-              </div>
-            </div>
-            )}
-          </div>
+          </Link>
         </div>
       </div>
     </div>
