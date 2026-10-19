@@ -10,9 +10,12 @@ import {
 import {
   assertCanAllocate,
   assertQtyPurchased,
+  chargedUnitCost,
   computeLotMetrics,
+  parseTotalPurchaseCost,
   csvEscape,
   groupMonthEndRows,
+  allocationReportDate,
   isMonthInWindow,
   lotMatchesDevice,
   monthBounds,
@@ -90,17 +93,41 @@ describe('roles helpers', () => {
 })
 
 describe('lot math', () => {
-  it('computes purchase cost, remaining qty, and stock value', () => {
-    expect(computeLotMetrics(7, 1000, 0)).toEqual({
+  it('computes purchase cost, remaining qty, and stock value from the entered total', () => {
+    expect(computeLotMetrics(7, 7000, 0)).toEqual({
       total_purchase_cost: 7000,
       qty_in_stock: 7,
       stock_value: 7000,
     })
-    expect(computeLotMetrics(7, 1000, 3)).toEqual({
+    expect(computeLotMetrics(7, 7000, 3)).toEqual({
       total_purchase_cost: 7000,
       qty_in_stock: 4,
       stock_value: 4000,
     })
+  })
+
+  it('applies tax by using the entered total instead of qty times unit cost', () => {
+    expect(computeLotMetrics(3, 330, 1)).toEqual({
+      total_purchase_cost: 330,
+      qty_in_stock: 2,
+      stock_value: 220,
+    })
+    expect(computeLotMetrics(3, 100, 1)).toEqual({
+      total_purchase_cost: 100,
+      qty_in_stock: 2,
+      stock_value: 66.67,
+    })
+    expect(chargedUnitCost({ qty_purchased: 3, unit_cost: 100, total_purchase_cost: 330 })).toBe(110)
+    expect(chargedUnitCost({ qty_purchased: 3, unit_cost: 100 })).toBe(100)
+    expect(parseTotalPurchaseCost('')).toEqual({
+      ok: false,
+      error: 'Total purchase cost is required',
+    })
+    expect(parseTotalPurchaseCost(-1)).toEqual({
+      ok: false,
+      error: 'Total purchase cost cannot be negative',
+    })
+    expect(parseTotalPurchaseCost('330.00')).toEqual({ ok: true, total: 330 })
   })
 
   it('rejects over-allocation and qty below already assigned', () => {
@@ -186,6 +213,7 @@ describe('FIFO lot default', () => {
         {
           id: 'new',
           item_id: 'B Dell',
+          cpa_number: null,
           purchase_date: '2026-10-01',
           vendor: null,
           item_description: null,
@@ -202,6 +230,7 @@ describe('FIFO lot default', () => {
         {
           id: 'old',
           item_id: 'A Dell',
+          cpa_number: null,
           purchase_date: '2026-09-15',
           vendor: 'MicroAge',
           item_description: 'Dell Latitude 5550 laptop',
@@ -233,6 +262,7 @@ describe('FIFO lot default', () => {
         {
           id: 'dell',
           item_id: 'A Dell',
+          cpa_number: null,
           purchase_date: '2026-09-15',
           vendor: null,
           item_description: null,
@@ -249,6 +279,7 @@ describe('FIFO lot default', () => {
         {
           id: 'hp',
           item_id: 'B HP',
+          cpa_number: null,
           purchase_date: '2026-09-20',
           vendor: null,
           item_description: null,
@@ -419,6 +450,7 @@ describe('month-end report', () => {
       purchase_date: '2026-09-15',
       manufacturer: 'Dell',
       model: 'Latitude 5550',
+      cpa_number: null,
       ...partial,
     }
   }
@@ -432,6 +464,7 @@ describe('month-end report', () => {
         assigned_date: '2026-10-01',
         office: 'Florida',
         item_id: '010101 Dell Latitude',
+        cpa_number: 'CPA-9',
         serial_number: 'AAA',
         user_name: 'Ann',
       }),
@@ -451,6 +484,7 @@ describe('month-end report', () => {
     expect(groups[0].allocated_cost).toBe(2000)
     expect(groups[0].office).toBe('Florida')
     expect(groups[0].purchase_date).toBe('2026-09-15')
+    expect(groups[0].cpa_number).toBe('CPA-9')
   })
 
   it('splits the same make/model when they come from two lots on the same day', () => {
@@ -510,6 +544,41 @@ describe('month-end report', () => {
     expect(groups.map((g) => g.item_id).sort()).toEqual(['A Dell', 'B HP'])
   })
 
+  it('puts a late-recorded charge on the month it was recorded, keeping the original assigned date', () => {
+    const groups = groupMonthEndRows([
+      alloc({
+        id: '1',
+        lot_id: 'lot-a',
+        assigned_date: '2026-06-23',
+        recorded_date: '2026-06-23',
+        office: 'Atlanta',
+        item_id: '003',
+      }),
+      alloc({
+        id: '2',
+        lot_id: 'lot-a',
+        assigned_date: '2026-06-23',
+        recorded_date: '2026-10-05',
+        office: 'Atlanta',
+        item_id: '003',
+      }),
+    ])
+    expect(groups).toHaveLength(2)
+    expect(groups.map((g) => [g.report_month, g.assigned_date, g.recorded_late])).toEqual([
+      ['2026-06', '2026-06-23', false],
+      ['2026-10', '2026-06-23', true],
+    ])
+    const csv = monthEndCsv(groups, { includeMonthColumn: true })
+    expect(csv).toContain('2026-10,,2026-06-23,003,')
+  })
+
+  it('falls back to assigned_date when recorded_date is missing', () => {
+    expect(allocationReportDate({ assigned_date: '2026-09-01', recorded_date: null })).toBe('2026-09-01')
+    expect(allocationReportDate({ assigned_date: '2026-06-23', recorded_date: '2026-10-05' })).toBe(
+      '2026-10-05'
+    )
+  })
+
   it('limits trailing month keys to 12 by default and CSV includes a month column for multi-month files', () => {
     const keys = trailingMonthKeys(new Date('2026-09-01T15:00:00Z'))
     expect(keys).toHaveLength(12)
@@ -524,7 +593,10 @@ describe('month-end report', () => {
         {
           key: 'k',
           assigned_date: '2026-10-01',
+          report_month: '2026-10',
+          recorded_late: false,
           item_id: '010101 Dell Latitude',
+          cpa_number: 'CPA-100',
           office: 'Florida',
           quantity: 2,
           unit_cost: 1000,
@@ -538,8 +610,12 @@ describe('month-end report', () => {
       ],
       { includeMonthColumn: true }
     )
-    expect(csv).toContain('Month,Date assigned,Item ID,Lot purchased,Office,Quantity,Unit cost,Allocated cost')
-    expect(csv).toContain('2026-10,2026-10-01,010101 Dell Latitude,2026-09-15,Florida,2,1000,2000')
+    expect(csv).toContain(
+      'Month,CPA #,Date assigned,Invoice #,Make / Model,Lot purchased,Office,Quantity,Unit cost,Allocated cost'
+    )
+    expect(csv).toContain(
+      '2026-10,CPA-100,2026-10-01,010101 Dell Latitude,Dell Latitude 5550,2026-09-15,Florida,2,1000,2000'
+    )
     expect(csvEscape('a,b')).toBe('"a,b"')
   })
 
@@ -580,12 +656,15 @@ describe('month-end report', () => {
       {
         key: 'a',
         assigned_date: '2026-09-01',
+        report_month: '2026-09',
+        recorded_late: false,
         item_id: 'x',
         office: 'Florida',
         quantity: 2,
         unit_cost: 1000,
         allocated_cost: 2000,
         unmatched: false,
+        cpa_number: null,
         purchase_date: null,
         manufacturer: null,
         model: null,
@@ -594,12 +673,15 @@ describe('month-end report', () => {
       {
         key: 'b',
         assigned_date: '2026-09-02',
+        report_month: '2026-09',
+        recorded_late: false,
         item_id: 'y',
         office: 'Charlotte',
         quantity: 1,
         unit_cost: 500,
         allocated_cost: 500.5,
         unmatched: false,
+        cpa_number: null,
         purchase_date: null,
         manufacturer: null,
         model: null,
@@ -611,12 +693,15 @@ describe('month-end report', () => {
         {
           key: 'a',
           assigned_date: '2026-09-01',
+          report_month: '2026-09',
+          recorded_late: false,
           item_id: 'x',
           office: 'Florida',
           quantity: 2,
           unit_cost: 1000,
           allocated_cost: 2000,
           unmatched: false,
+          cpa_number: null,
           purchase_date: null,
           manufacturer: null,
           model: null,
@@ -625,12 +710,15 @@ describe('month-end report', () => {
         {
           key: 'b',
           assigned_date: '2026-09-02',
+          report_month: '2026-09',
+          recorded_late: false,
           item_id: 'y',
           office: 'Charlotte',
           quantity: 1,
           unit_cost: 500,
           allocated_cost: 500.5,
           unmatched: false,
+          cpa_number: null,
           purchase_date: null,
           manufacturer: null,
           model: null,
@@ -639,12 +727,15 @@ describe('month-end report', () => {
         {
           key: 'c',
           assigned_date: '2026-09-03',
+          report_month: '2026-09',
+          recorded_late: false,
           item_id: 'z',
           office: 'Florida',
           quantity: 1,
           unit_cost: 100,
           allocated_cost: 100,
           unmatched: false,
+          cpa_number: null,
           purchase_date: null,
           manufacturer: null,
           model: null,
@@ -711,12 +802,15 @@ describe('stock report email', () => {
         {
           key: 'k',
           assigned_date: '2026-08-02',
+          report_month: '2026-08',
+          recorded_late: false,
           item_id: 'A Dell',
           office: 'Charlotte',
           quantity: 1,
           unit_cost: 1000,
           allocated_cost: 1000,
           unmatched: false,
+          cpa_number: null,
           purchase_date: null,
           manufacturer: null,
           model: null,

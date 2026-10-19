@@ -10,11 +10,13 @@ const inputClass =
 
 export interface PurchaseLotForm {
   item_id: string
+  cpa_number: string
   purchase_date: string
   vendor: string
   item_description: string
   qty_purchased: string
   unit_cost: string
+  total_purchase_cost: string
   asset_type: StockAssetType
   manufacturer: string
   model: string
@@ -23,11 +25,13 @@ export interface PurchaseLotForm {
 function toForm(lot?: LotWithMetrics | null): PurchaseLotForm {
   return {
     item_id: lot?.item_id || '',
+    cpa_number: lot?.cpa_number || '',
     purchase_date: lot?.purchase_date || '',
     vendor: lot?.vendor || '',
     item_description: lot?.item_description || '',
     qty_purchased: lot ? String(lot.qty_purchased) : '',
     unit_cost: lot ? String(lot.unit_cost) : '',
+    total_purchase_cost: lot?.total_purchase_cost != null ? String(lot.total_purchase_cost) : '',
     asset_type: lot?.asset_type || 'laptop',
     manufacturer: lot?.manufacturer || '',
     model: lot?.model || '',
@@ -62,7 +66,7 @@ export default function PurchaseLotModal({
   const save = async () => {
     setError(null)
     if (!form.item_id.trim()) {
-      setError('Item ID is required')
+      setError('Invoice # is required')
       return
     }
     if (!form.purchase_date) {
@@ -77,15 +81,21 @@ export default function PurchaseLotModal({
       setError('Model is required')
       return
     }
+    if (form.total_purchase_cost.trim() === '') {
+      setError('Total purchase cost is required')
+      return
+    }
     setSaving(true)
     try {
       const payload = {
         item_id: form.item_id.trim(),
+        cpa_number: form.cpa_number.trim() || null,
         purchase_date: form.purchase_date,
         vendor: form.vendor.trim() || null,
         item_description: form.item_description.trim() || null,
         qty_purchased: Number(form.qty_purchased),
         unit_cost: Number(form.unit_cost),
+        total_purchase_cost: Number(form.total_purchase_cost),
         asset_type: form.asset_type,
         manufacturer: form.manufacturer.trim(),
         model: form.model.trim(),
@@ -152,7 +162,11 @@ export default function PurchaseLotModal({
             </p>
           )}
           <label className="block text-sm font-medium text-gray-700">
-            Item ID
+            CPA #
+            <input value={form.cpa_number} onChange={set('cpa_number')} className={inputClass} disabled={saving} />
+          </label>
+          <label className="block text-sm font-medium text-gray-700">
+            Invoice #
             <input value={form.item_id} onChange={set('item_id')} className={inputClass} disabled={saving} />
           </label>
           <label className="block text-sm font-medium text-gray-700">
@@ -204,6 +218,21 @@ export default function PurchaseLotModal({
               />
             </label>
           </div>
+          <label className="block text-sm font-medium text-gray-700">
+            Total purchase cost
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.total_purchase_cost}
+              onChange={set('total_purchase_cost')}
+              className={inputClass}
+              disabled={saving}
+            />
+            <span className="mt-1 block text-xs font-normal text-gray-500">
+              Include tax. Offices are charged an equal share of this amount.
+            </span>
+          </label>
           <label className="block text-sm font-medium text-gray-700">
             Type
             <select value={form.asset_type} onChange={set('asset_type')} className={inputClass} disabled={saving}>

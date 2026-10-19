@@ -125,7 +125,12 @@ async function main() {
 
   const { data: inserted, error: insertLotsErr } = await sb
     .from('asset_purchase_lots')
-    .insert(lots)
+    .insert(
+      lots.map((lot) => ({
+        ...lot,
+        total_purchase_cost: Math.round(lot.qty_purchased * lot.unit_cost * 100) / 100,
+      }))
+    )
     .select('id, item_id, unit_cost')
   if (insertLotsErr) throw insertLotsErr
   const byItem = Object.fromEntries((inserted || []).map((row) => [row.item_id, row]))

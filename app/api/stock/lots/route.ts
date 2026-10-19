@@ -8,6 +8,7 @@ import {
   isLotVisibleOnTracker,
   isStockAssetType,
   moneyNumber,
+  parseTotalPurchaseCost,
 } from '@/lib/stock-tracker'
 import { fetchChargeOffices, fetchLotsWithMetrics } from '@/lib/stock-consume'
 
@@ -85,8 +86,9 @@ export async function POST(request: NextRequest) {
     const assetType = String(body.asset_type || '').trim()
     const qtyPurchased = Number(body.qty_purchased)
     const unitCost = moneyNumber(body.unit_cost)
+    const totalCost = parseTotalPurchaseCost(body.total_purchase_cost)
 
-    if (!itemId) return NextResponse.json({ error: 'Item ID is required' }, { status: 400 })
+    if (!itemId) return NextResponse.json({ error: 'Invoice # is required' }, { status: 400 })
     if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)) {
       return NextResponse.json({ error: 'Purchase date is required' }, { status: 400 })
     }
@@ -99,6 +101,7 @@ export async function POST(request: NextRequest) {
     const qtyCheck = assertQtyPurchased(qtyPurchased, 0)
     if (!qtyCheck.ok) return NextResponse.json({ error: qtyCheck.error }, { status: 400 })
     if (unitCost < 0) return NextResponse.json({ error: 'Unit cost cannot be negative' }, { status: 400 })
+    if (!totalCost.ok) return NextResponse.json({ error: totalCost.error }, { status: 400 })
     const hardware = assertLotMakeModel(body.manufacturer, body.model)
     if (!hardware.ok) return NextResponse.json({ error: hardware.error }, { status: 400 })
 
@@ -108,11 +111,13 @@ export async function POST(request: NextRequest) {
       .from('asset_purchase_lots')
       .insert({
         item_id: itemId,
+        cpa_number: emptyToNull(body.cpa_number),
         purchase_date: purchaseDate,
         vendor: emptyToNull(body.vendor),
         item_description: emptyToNull(body.item_description),
         qty_purchased: qtyPurchased,
         unit_cost: unitCost,
+        total_purchase_cost: totalCost.total,
         asset_type: assetType,
         manufacturer: hardware.manufacturer,
         model: hardware.model,
@@ -129,7 +134,7 @@ export async function POST(request: NextRequest) {
       entity_type: 'device',
       entity_id: data.id,
       entity_label: itemId,
-      details: { qty_purchased: qtyPurchased, unit_cost: unitCost },
+      details: { qty_purchased: qtyPurchased, unit_cost: unitCost, total_purchase_cost: totalCost.total },
     })
     return NextResponse.json({ lot: data })
   } catch (error: unknown) {

@@ -8,7 +8,7 @@ import {
   requireChargeOffice,
   setDeviceNotFromStock,
 } from '@/lib/stock-consume'
-import { consumeSkipError, parseChargeOfficeInput } from '@/lib/stock-tracker'
+import { consumeSkipError, parseChargeOfficeInput, ymdInTimeZone } from '@/lib/stock-tracker'
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,6 +68,35 @@ export async function POST(request: NextRequest) {
     if (error) throw error
     if (!device) return NextResponse.json({ error: 'Device not found' }, { status: 404 })
 
+    const { data: existingAllocation, error: allocError } = await supabase
+      .from('asset_allocations')
+      .select('id, lot_id')
+      .eq('device_id', deviceId)
+      .maybeSingle()
+    if (allocError) throw allocError
+    if (existingAllocation) {
+      return NextResponse.json(
+        {
+          error: existingAllocation.lot_id
+            ? 'This device is already charged to a purchase lot'
+            : 'This device already has an unmatched assignment — attach the lot from Unmatched assignments',
+        },
+        { status: 409 }
+      )
+    }
+
+    let assignedDate: string | undefined
+    if (body.assigned_date != null && String(body.assigned_date).trim()) {
+      const raw = String(body.assigned_date).trim()
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return NextResponse.json({ error: 'Assigned date must be YYYY-MM-DD' }, { status: 400 })
+      }
+      if (raw > ymdInTimeZone(new Date())) {
+        return NextResponse.json({ error: 'Assigned date cannot be in the future' }, { status: 400 })
+      }
+      assignedDate = raw
+    }
+
     const employeeId =
       device.employee_id || (body.employee_id ? String(body.employee_id) : null)
     let chargeOffice: string | null = null
@@ -85,7 +114,11 @@ export async function POST(request: NextRequest) {
       force: true,
       lotId,
       chargeOffice,
+      assignedDate,
     })
+    if (consume.skipped === 'error' || consume.skipped === 'insert-failed') {
+      return NextResponse.json({ error: 'Failed to charge purchase lot' }, { status: 500 })
+    }
     const skipError = consumeSkipError(consume.skipped)
     if (skipError) {
       return NextResponse.json({ error: skipError }, { status: 400 })

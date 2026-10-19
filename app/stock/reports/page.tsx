@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Download, FileSpreadsheet, Loader2, Mail } from 'lucide-react'
 import {
   assertReportRange,
+  formatMakeModel,
   formatUsd,
   monthKeyFromYmd,
   monthKeysFromThrough,
@@ -318,8 +319,10 @@ export default function StockReportsPage() {
               <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
                 <tr>
                   <th className="px-4 py-3 w-8" />
+                  <th className="px-4 py-3">CPA #</th>
                   <th className="px-4 py-3">Date assigned</th>
-                  <th className="px-4 py-3">Item ID</th>
+                  <th className="px-4 py-3">Invoice #</th>
+                  <th className="px-4 py-3">Make / Model</th>
                   <th className="px-4 py-3">Lot purchased</th>
                   <th className="px-4 py-3">Office</th>
                   <th className="px-4 py-3 text-right">Quantity</th>
@@ -348,12 +351,26 @@ export default function StockReportsPage() {
                             </button>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-800">{g.assigned_date}</td>
-                        <td className="px-4 py-3 font-medium text-gray-900">
+                        <td className="px-4 py-3 font-medium text-gray-900">{g.cpa_number || '—'}</td>
+                        <td className="px-4 py-3 text-gray-800">
+                          {g.assigned_date}
+                          {g.recorded_late && (
+                            <span
+                              className="block text-xs text-amber-700"
+                              title="Assigned in an earlier month but entered in the stock tracker later, so it is on this report"
+                            >
+                              Recorded late
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-900">
                           {g.item_id}
                           {g.unmatched && (
                             <span className="ml-2 text-xs font-normal text-amber-700">Unmatched</span>
                           )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          {formatMakeModel(g.manufacturer, g.model) || '—'}
                         </td>
                         <td className="px-4 py-3 text-gray-700">{g.purchase_date || '—'}</td>
                         <td className="px-4 py-3 text-gray-700">{g.office}</td>
@@ -369,7 +386,7 @@ export default function StockReportsPage() {
                         g.rows.map((row) => (
                           <tr key={row.id} className="bg-gray-50 text-gray-600">
                             <td />
-                            <td className="px-4 py-2" colSpan={7}>
+                            <td className="px-4 py-2" colSpan={9}>
                               Serial {row.serial_number || '—'}
                               {row.user_name ? ` · ${row.user_name}` : ''}
                             </td>
@@ -382,7 +399,7 @@ export default function StockReportsPage() {
               <tfoot>
                 <tr className="bg-gray-50 font-semibold text-gray-900 border-t border-gray-200">
                   <td className="px-4 py-3" />
-                  <td className="px-4 py-3" colSpan={4}>
+                  <td className="px-4 py-3" colSpan={6}>
                     Total
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{totals.quantity}</td>

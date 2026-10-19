@@ -7,6 +7,7 @@ import {
   assertQtyPurchased,
   isStockAssetType,
   moneyNumber,
+  parseTotalPurchaseCost,
 } from '@/lib/stock-tracker'
 import { fetchLotsWithMetrics } from '@/lib/stock-consume'
 
@@ -33,9 +34,10 @@ export async function PATCH(
 
     if ('item_id' in body) {
       const itemId = String(body.item_id || '').trim()
-      if (!itemId) return NextResponse.json({ error: 'Item ID is required' }, { status: 400 })
+      if (!itemId) return NextResponse.json({ error: 'Invoice # is required' }, { status: 400 })
       updates.item_id = itemId
     }
+    if ('cpa_number' in body) updates.cpa_number = emptyToNull(body.cpa_number)
     if ('purchase_date' in body) {
       const purchaseDate = String(body.purchase_date || '').trim()
       if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)) {
@@ -59,6 +61,11 @@ export async function PATCH(
       const unitCost = moneyNumber(body.unit_cost)
       if (unitCost < 0) return NextResponse.json({ error: 'Unit cost cannot be negative' }, { status: 400 })
       updates.unit_cost = unitCost
+    }
+    if ('total_purchase_cost' in body) {
+      const totalCost = parseTotalPurchaseCost(body.total_purchase_cost)
+      if (!totalCost.ok) return NextResponse.json({ error: totalCost.error }, { status: 400 })
+      updates.total_purchase_cost = totalCost.total
     }
     if ('qty_purchased' in body) {
       const qtyPurchased = Number(body.qty_purchased)

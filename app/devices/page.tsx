@@ -29,6 +29,7 @@ import {
 import { isLoanerOverdue } from '@/lib/loaner-checkout'
 import DeviceFormModal from '@/components/devices/DeviceFormModal'
 import SyncReviewModal from '@/components/devices/SyncReviewModal'
+import MultiSelectFilter from '@/components/MultiSelectFilter'
 
 type SortKey = 'device_name' | 'asset_tag' | 'asset_type' | 'make_model' | 'serial_number' | 'assigned' | 'department' | 'location' | 'status' | 'warranty_end'
 
@@ -37,11 +38,18 @@ const DEVICES_LIST_STATE_KEY = 'ems-devices-list-state'
 interface DevicesListState {
   searchTerm: string
   statusFilter: string
-  typeFilter: string
-  departmentFilter: string
-  locationFilter: string
+  typeFilter: string[]
+  departmentFilter: string[]
+  locationFilter: string[]
   sortKey: SortKey
   sortAsc: boolean
+}
+
+// Older saved state stored a single string per filter.
+function savedFilterList(value: unknown): string[] {
+  if (typeof value === 'string') return value ? [value] : []
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string' && v.length > 0)
+  return []
 }
 
 function readDevicesListState(): Partial<DevicesListState> {
@@ -120,9 +128,9 @@ export default function DevicesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
-  const [departmentFilter, setDepartmentFilter] = useState('')
-  const [locationFilter, setLocationFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string[]>([])
+  const [departmentFilter, setDepartmentFilter] = useState<string[]>([])
+  const [locationFilter, setLocationFilter] = useState<string[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
   const [departments, setDepartments] = useState<string[]>([])
@@ -145,9 +153,9 @@ export default function DevicesPage() {
       if (!opts?.quiet) setLoading(true)
       const params = new URLSearchParams()
       if (statusFilter) params.set('status', statusFilter)
-      if (typeFilter) params.set('asset_type', typeFilter)
-      if (departmentFilter) params.set('department', departmentFilter)
-      if (locationFilter) params.set('location', locationFilter)
+      typeFilter.forEach((t) => params.append('asset_type', t))
+      departmentFilter.forEach((d) => params.append('department', d))
+      locationFilter.forEach((l) => params.append('location', l))
       // Bypass browser / Next fetch cache so edits on /devices/[id] show up
       // immediately when returning to this list.
       const response = await fetch(`/api/devices?${params}`, { cache: 'no-store' })
@@ -170,11 +178,13 @@ export default function DevicesPage() {
     const saved = readDevicesListState()
     if (typeof saved.searchTerm === 'string') setSearchTerm(saved.searchTerm)
     if (typeof saved.statusFilter === 'string') setStatusFilter(saved.statusFilter)
-    if (typeof saved.typeFilter === 'string' && DEVICE_ASSET_TYPES.includes(saved.typeFilter as (typeof DEVICE_ASSET_TYPES)[number])) {
-      setTypeFilter(saved.typeFilter)
-    }
-    if (typeof saved.departmentFilter === 'string') setDepartmentFilter(saved.departmentFilter)
-    if (typeof saved.locationFilter === 'string') setLocationFilter(saved.locationFilter)
+    setTypeFilter(
+      savedFilterList(saved.typeFilter).filter((t) =>
+        DEVICE_ASSET_TYPES.includes(t as (typeof DEVICE_ASSET_TYPES)[number])
+      )
+    )
+    setDepartmentFilter(savedFilterList(saved.departmentFilter))
+    setLocationFilter(savedFilterList(saved.locationFilter))
     if (typeof saved.sortKey === 'string') setSortKey(saved.sortKey as SortKey)
     if (typeof saved.sortAsc === 'boolean') setSortAsc(saved.sortAsc)
     setListReady(true)
@@ -359,7 +369,9 @@ export default function DevicesPage() {
     }
   }
 
-  const hasActiveFilters = Boolean(statusFilter || typeFilter || departmentFilter || locationFilter || searchTerm)
+  const hasActiveFilters = Boolean(
+    statusFilter || typeFilter.length || departmentFilter.length || locationFilter.length || searchTerm
+  )
 
   // Phase 21: O(1) lookups for the per-row ⚠ badges.
   const flaggedDeptSet = useMemo(
@@ -382,9 +394,9 @@ export default function DevicesPage() {
 
   const clearFilters = () => {
     setStatusFilter('')
-    setTypeFilter('')
-    setDepartmentFilter('')
-    setLocationFilter('')
+    setTypeFilter([])
+    setDepartmentFilter([])
+    setLocationFilter([])
     setSearchTerm('')
   }
 
@@ -410,8 +422,6 @@ export default function DevicesPage() {
       </span>
     </th>
   )
-
-  const selectClass = 'px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -592,24 +602,28 @@ export default function DevicesPage() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectClass}>
-              <option value="">All Types</option>
-              {DEVICE_ASSET_TYPES.map((t) => (
-                <option key={t} value={t}>{ASSET_TYPE_LABELS[t]}</option>
-              ))}
-            </select>
-            <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className={selectClass}>
-              <option value="">All Departments</option>
-              {departments.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-            <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className={selectClass}>
-              <option value="">All Locations</option>
-              {locations.map((l) => (
-                <option key={l} value={l}>{l}</option>
-              ))}
-            </select>
+            <MultiSelectFilter
+              allLabel="All Types"
+              pluralNoun="types"
+              options={DEVICE_ASSET_TYPES}
+              selected={typeFilter}
+              onChange={setTypeFilter}
+              getLabel={(t) => ASSET_TYPE_LABELS[t as (typeof DEVICE_ASSET_TYPES)[number]] ?? t}
+            />
+            <MultiSelectFilter
+              allLabel="All Departments"
+              pluralNoun="departments"
+              options={departments}
+              selected={departmentFilter}
+              onChange={setDepartmentFilter}
+            />
+            <MultiSelectFilter
+              allLabel="All Locations"
+              pluralNoun="locations"
+              options={locations}
+              selected={locationFilter}
+              onChange={setLocationFilter}
+            />
             {hasActiveFilters && (
               <>
                 <span

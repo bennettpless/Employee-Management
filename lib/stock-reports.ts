@@ -14,16 +14,17 @@ export async function fetchAllocationsInRange(
     .from('asset_allocations')
     .select(
       `
-      id, lot_id, device_id, assigned_date, office, quantity, unit_cost, allocated_cost, source, created_by, created_at,
-      lot:asset_purchase_lots(item_id, purchase_date, manufacturer, model),
+      id, lot_id, device_id, assigned_date, recorded_date, office, quantity, unit_cost, allocated_cost, source, created_by, created_at,
+      lot:asset_purchase_lots(item_id, cpa_number, purchase_date, manufacturer, model),
       device:devices(
         serial_number,
         employee:employees(display_name, email, first_name, last_name)
       )
     `
     )
-    .gte('assigned_date', start)
-    .lte('assigned_date', end)
+    .gte('recorded_date', start)
+    .lte('recorded_date', end)
+    .order('recorded_date', { ascending: true })
     .order('assigned_date', { ascending: true })
   if (error) throw error
 
@@ -39,6 +40,7 @@ export async function fetchAllocationsInRange(
       lot_id: row.lot_id,
       device_id: row.device_id,
       assigned_date: row.assigned_date,
+      recorded_date: row.recorded_date,
       office: row.office,
       quantity: row.quantity,
       unit_cost: row.unit_cost,
@@ -47,6 +49,7 @@ export async function fetchAllocationsInRange(
       created_by: row.created_by,
       created_at: row.created_at,
       item_id: row.lot?.item_id || 'Unmatched',
+      cpa_number: row.lot?.cpa_number || null,
       purchase_date: row.lot?.purchase_date || null,
       manufacturer: row.lot?.manufacturer || null,
       model: row.lot?.model || null,
@@ -59,11 +62,11 @@ export async function fetchAllocationsInRange(
 export async function fetchAllocationYears(
   supabase: QueryClient = getServiceSupabase()
 ): Promise<number[]> {
-  const { data, error } = await supabase.from('asset_allocations').select('assigned_date')
+  const { data, error } = await supabase.from('asset_allocations').select('recorded_date')
   if (error) throw error
   const years = new Set<number>()
   for (const row of data || []) {
-    const y = Number(String(row.assigned_date).slice(0, 4))
+    const y = Number(String(row.recorded_date).slice(0, 4))
     if (Number.isFinite(y)) years.add(y)
   }
   return [...years].sort((a, b) => b - a)

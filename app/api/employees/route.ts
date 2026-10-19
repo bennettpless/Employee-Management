@@ -116,16 +116,43 @@ export async function POST(request: NextRequest) {
       .eq('email', email)
       .maybeSingle()
 
-    if (existing) {
+    if (existing && existing.employment_status === 'active') {
       return NextResponse.json(
-        {
-          error:
-            existing.employment_status === 'active'
-              ? 'An employee with this email already exists'
-              : `An employee with this email already exists (status: ${existing.employment_status})`,
-        },
+        { error: 'An employee with this email already exists' },
         { status: 409 }
       )
+    }
+
+    // Re-adding a terminated/on-leave person reactivates their existing row
+    // (keeps device + assignment history). Blank form fields don't wipe data.
+    if (existing) {
+      const updates: Record<string, any> = {
+        employment_status: 'active',
+        termination_date: null,
+      }
+      for (const field of optionalFields) {
+        if (employeeData[field]) updates[field] = employeeData[field]
+      }
+
+      const { data: employee, error: updateError } = await supabase
+        .from('employees')
+        .update(updates)
+        .eq('id', existing.id)
+        .select()
+        .single()
+
+      if (updateError) throw updateError
+
+      await logAudit({
+        actor: await currentActor(),
+        action: 'employee.reactivate',
+        entity_type: 'employee',
+        entity_id: employee.id,
+        entity_label: employee.display_name || employee.email,
+        details: { email, via: 'manual', previous_status: existing.employment_status },
+      })
+
+      return NextResponse.json({ success: true, employee, reactivated: true })
     }
 
     const { data: employee, error: insertError } = await supabase

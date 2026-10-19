@@ -1,7 +1,9 @@
 import { getServiceSupabase } from '@/lib/supabase'
 import {
+  chargedUnitCost,
   computeLotMetrics,
   moneyNumber,
+  resolveTotalPurchaseCost,
   remainingQty,
   resolveStockLot,
   resolveTaggedLotId,
@@ -39,23 +41,29 @@ export interface StockLotPrompt {
   skipped?: string
 }
 
-export function enrichLots(
-  lots: PurchaseLot[],
-  allocations: Array<Pick<StockAllocation, 'lot_id' | 'quantity'> & { assigned_date?: string | null }>
-): LotWithMetrics[] {
+type LotAllocationRow = Pick<StockAllocation, 'lot_id' | 'quantity'> & {
+  assigned_date?: string | null
+  recorded_date?: string | null
+}
+
+export function enrichLots(lots: PurchaseLot[], allocations: LotAllocationRow[]): LotWithMetrics[] {
   const assignedByLot = new Map<string, number>()
   const lastAssignedByLot = new Map<string, string>()
   for (const row of allocations) {
     if (!row.lot_id) continue
     assignedByLot.set(row.lot_id, (assignedByLot.get(row.lot_id) || 0) + row.quantity)
-    const assigned = String(row.assigned_date || '').trim()
+    const assigned = String(row.recorded_date || row.assigned_date || '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(assigned)) continue
     const prev = lastAssignedByLot.get(row.lot_id)
     if (!prev || assigned > prev) lastAssignedByLot.set(row.lot_id, assigned)
   }
   return lots.map((lot) => {
     const qty_assigned = assignedByLot.get(lot.id) || 0
-    const metrics = computeLotMetrics(lot.qty_purchased, moneyNumber(lot.unit_cost), qty_assigned)
+    const metrics = computeLotMetrics(
+      lot.qty_purchased,
+      resolveTotalPurchaseCost(lot),
+      qty_assigned
+    )
     return {
       ...lot,
       unit_cost: moneyNumber(lot.unit_cost),
@@ -77,12 +85,11 @@ export async function fetchLotsWithMetrics(
   if (lotError) throw lotError
 
   const ids = (lots || []).map((l: PurchaseLot) => l.id)
-  let allocations: Array<Pick<StockAllocation, 'lot_id' | 'quantity'> & { assigned_date?: string | null }> =
-    []
+  let allocations: LotAllocationRow[] = []
   if (ids.length > 0) {
     const { data, error } = await supabase
       .from('asset_allocations')
-      .select('lot_id, quantity, assigned_date')
+      .select('lot_id, quantity, assigned_date, recorded_date')
       .in('lot_id', ids)
     if (error) throw error
     allocations = data || []
@@ -96,7 +103,7 @@ export function toLotCandidates(lots: LotWithMetrics[]): StockLotCandidate[] {
     item_id: lot.item_id,
     purchase_date: lot.purchase_date,
     qty_in_stock: lot.qty_in_stock,
-    unit_cost: moneyNumber(lot.unit_cost),
+    unit_cost: chargedUnitCost(lot),
     asset_type: lot.asset_type,
     manufacturer: lot.manufacturer,
     model: lot.model,
@@ -155,7 +162,7 @@ async function insertAllocation(
     source?: 'auto' | 'manual'
   }
 ): Promise<{ id: string | null; skipped?: string }> {
-  const unitCost = opts.lot ? moneyNumber(opts.lot.unit_cost) : null
+  const unitCost = opts.lot ? chargedUnitCost(opts.lot) : null
   const quantity = opts.quantity && opts.quantity > 0 ? opts.quantity : 1
   const { data: inserted, error } = await supabase
     .from('asset_allocations')
@@ -163,6 +170,7 @@ async function insertAllocation(
       lot_id: opts.lot ? opts.lot.id : null,
       device_id: opts.deviceId,
       assigned_date: opts.assignedDate,
+      recorded_date: ymdInTimeZone(new Date()),
       office: opts.office,
       quantity,
       unit_cost: opts.lot ? unitCost : null,

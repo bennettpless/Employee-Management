@@ -23,9 +23,11 @@ export async function GET(request: NextRequest) {
     const supabase = getServiceSupabase()
     const searchParams = new URL(request.url).searchParams
     const status = searchParams.get('status')
-    const assetType = searchParams.get('asset_type')
-    const department = searchParams.get('department')
-    const location = searchParams.get('location')
+    const assetTypes = searchParams
+      .getAll('asset_type')
+      .filter((t) => ASSET_TYPES.includes(t as any))
+    const departmentFilters = searchParams.getAll('department').filter(Boolean)
+    const locationFilters = searchParams.getAll('location').filter(Boolean)
 
     let query = supabase
       .from('devices')
@@ -46,14 +48,14 @@ export async function GET(request: NextRequest) {
     } else if (status && DEVICE_STATUSES.includes(status as any)) {
       query = query.eq('status', status)
     }
-    if (assetType && ASSET_TYPES.includes(assetType as any)) {
-      query = query.eq('asset_type', assetType)
+    if (assetTypes.length) {
+      query = query.in('asset_type', assetTypes)
     }
-    if (department) {
-      query = query.eq('department', department)
+    if (departmentFilters.length) {
+      query = query.in('department', departmentFilters)
     }
-    if (location) {
-      query = query.eq('location', location)
+    if (locationFilters.length) {
+      query = query.in('location', locationFilters)
     }
 
     const { data: devices, error } = await query
@@ -76,9 +78,9 @@ export async function GET(request: NextRequest) {
     // you how many are in Repair when you've clicked "Active", instead of
     // going to zero. Search is client-side and not applied to chip counts.
     const chipRows = rows.filter((d: any) => {
-      if (assetType && d.asset_type !== assetType) return false
-      if (department && d.department !== department) return false
-      if (location && d.location !== location) return false
+      if (assetTypes.length && !assetTypes.includes(d.asset_type)) return false
+      if (departmentFilters.length && !departmentFilters.includes(d.department)) return false
+      if (locationFilters.length && !locationFilters.includes(d.location)) return false
       return true
     })
 

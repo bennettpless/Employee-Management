@@ -208,6 +208,32 @@ export async function PATCH(
     updateData.loaner_due_date = loanerNext.loaner_due_date
     updateData.loaner_checked_out_at = loanerNext.loaner_checked_out_at
 
+    const lotId = body.lot_id ? String(body.lot_id) : null
+    const notFromStock = Boolean(body.not_from_stock)
+    let chargeOffice: string | null = null
+    const taggedLot = lotId || existing.stock_lot_id || null
+    // A charge only happens on first assign from unassigned, or when a lot is explicitly picked.
+    const mayCharge =
+      Boolean(taggedLot) &&
+      !notFromStock &&
+      Boolean(nextEmployeeId) &&
+      (Boolean(lotId) || (assigneeChanging && !existing.employee_id))
+    if (mayCharge) {
+      const { data: existingAllocation, error: allocError } = await supabase
+        .from('asset_allocations')
+        .select('id')
+        .eq('device_id', params.id)
+        .maybeSingle()
+      if (allocError) throw allocError
+      if (!existingAllocation) {
+        const charge = await requireChargeOffice(parseChargeOfficeInput(body), supabase)
+        if (!charge.ok) {
+          return NextResponse.json({ error: charge.error }, { status: 400 })
+        }
+        chargeOffice = charge.office
+      }
+    }
+
     const { data: device, error } = await supabase
       .from('devices')
       .update(updateData)
@@ -229,18 +255,6 @@ export async function PATCH(
     }
 
     let stockLotPrompt = undefined as Awaited<ReturnType<typeof maybeConsumeStockLot>>['prompt']
-    const lotId = body.lot_id ? String(body.lot_id) : null
-    const notFromStock = Boolean(body.not_from_stock)
-    let chargeOffice: string | null = null
-    const willAssign = Boolean(nextEmployeeId)
-    const taggedLot = lotId || existing.stock_lot_id || null
-    if (taggedLot && !notFromStock && willAssign) {
-      const charge = await requireChargeOffice(parseChargeOfficeInput(body), supabase)
-      if (!charge.ok) {
-        return NextResponse.json({ error: charge.error }, { status: 400 })
-      }
-      chargeOffice = charge.office
-    }
 
     if (assigneeChanging) {
       const now = new Date().toISOString()

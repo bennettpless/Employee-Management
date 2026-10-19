@@ -2,10 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { FileSpreadsheet, Loader2, Plus, Pencil, Package } from 'lucide-react'
+import { FileSpreadsheet, Laptop, Loader2, Plus, Pencil, Package } from 'lucide-react'
+import ChargeDeviceModal from '@/components/stock/ChargeDeviceModal'
 import PurchaseLotModal from '@/components/stock/PurchaseLotModal'
 import { ASSET_TYPE_LABELS, officeNameToLocation } from '@/lib/devices'
-import { candidateLotsForPrompt, formatLotOptionLabel, formatUsd, type LotWithMetrics } from '@/lib/stock-tracker'
+import {
+  candidateLotsForPrompt,
+  formatLotOptionLabel,
+  formatMakeModel,
+  formatUsd,
+  type LotWithMetrics,
+} from '@/lib/stock-tracker'
 
 interface UnmatchedAllocation {
   id: string
@@ -33,6 +40,7 @@ export default function StockPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modalLot, setModalLot] = useState<LotWithMetrics | null | undefined>(undefined)
+  const [chargeDeviceOpen, setChargeDeviceOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -120,6 +128,14 @@ export default function StockPage() {
               <FileSpreadsheet className="w-4 h-4" />
               Reports
             </Link>
+            <button
+              type="button"
+              onClick={() => setChargeDeviceOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50"
+            >
+              <Laptop className="w-4 h-4" />
+              Charge existing device
+            </button>
             <button
               type="button"
               onClick={() => setModalLot(null)}
@@ -255,10 +271,11 @@ export default function StockPage() {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
                 <tr>
-                  <th className="px-4 py-3">Item ID</th>
+                  <th className="px-4 py-3">CPA #</th>
+                  <th className="px-4 py-3">Invoice #</th>
                   <th className="px-4 py-3">Purchase date</th>
                   <th className="px-4 py-3">Vendor</th>
-                  <th className="px-4 py-3">Description</th>
+                  <th className="px-4 py-3">Make / Model</th>
                   <th className="px-4 py-3 text-right">Qty purchased</th>
                   <th className="px-4 py-3 text-right">Unit cost</th>
                   <th className="px-4 py-3 text-right">Total purchase cost</th>
@@ -271,18 +288,18 @@ export default function StockPage() {
               <tbody className="divide-y divide-gray-100">
                 {lots.map((lot) => (
                   <tr key={lot.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">
+                    <td className="px-4 py-3 font-medium text-gray-900">{lot.cpa_number || '—'}</td>
+                    <td className="px-4 py-3 text-gray-900">
                       {lot.item_id}
                       <div className="text-xs text-gray-500 font-normal">
                         {ASSET_TYPE_LABELS[lot.asset_type]}
-                        {lot.manufacturer || lot.model
-                          ? ` · ${[lot.manufacturer, lot.model].filter(Boolean).join(' ')}`
-                          : ''}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-700">{lot.purchase_date}</td>
                     <td className="px-4 py-3 text-gray-700">{lot.vendor || '—'}</td>
-                    <td className="px-4 py-3 text-gray-700 max-w-xs">{lot.item_description || '—'}</td>
+                    <td className="px-4 py-3 text-gray-700 max-w-xs">
+                      {formatMakeModel(lot.manufacturer, lot.model) || '—'}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums">{lot.qty_purchased}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{formatUsd(lot.unit_cost)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
@@ -318,6 +335,18 @@ export default function StockPage() {
           onClose={() => setModalLot(undefined)}
           onSaved={() => {
             setModalLot(undefined)
+            load()
+          }}
+        />
+      )}
+
+      {chargeDeviceOpen && (
+        <ChargeDeviceModal
+          lots={lots}
+          chargeOffices={chargeOffices}
+          onClose={() => setChargeDeviceOpen(false)}
+          onSaved={() => {
+            setChargeDeviceOpen(false)
             load()
           }}
         />

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isStockAccessRequest } from '@/lib/admin'
 import { currentActor, logAudit } from '@/lib/audit'
 import { getServiceSupabase } from '@/lib/supabase'
-import { moneyNumber, roundMoney, parseChargeOfficeInput } from '@/lib/stock-tracker'
+import { chargedUnitCost, roundMoney, parseChargeOfficeInput, ymdInTimeZone } from '@/lib/stock-tracker'
 import { fetchLotsWithMetrics, requireChargeOffice, setDeviceNotFromStock } from '@/lib/stock-consume'
 
 export async function PATCH(
@@ -45,8 +45,13 @@ export async function PATCH(
           return NextResponse.json({ error: `Only ${lot.qty_in_stock} remaining in this lot` }, { status: 400 })
         }
         updates.lot_id = lotId
-        updates.unit_cost = moneyNumber(lot.unit_cost)
-        updates.allocated_cost = roundMoney(moneyNumber(lot.unit_cost) * existing.quantity)
+        const unitCost = chargedUnitCost(lot)
+        updates.unit_cost = unitCost
+        updates.allocated_cost = roundMoney(unitCost * existing.quantity)
+        if (!existing.lot_id) {
+          // The cost was $0 on whatever report it was on; put it on the next one.
+          updates.recorded_date = ymdInTimeZone(new Date())
+        }
       } else {
         updates.lot_id = null
         updates.unit_cost = null

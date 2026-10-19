@@ -25,11 +25,14 @@ export const CHARGE_OFFICE_REQUIRED = 'Pick which office to charge'
 export interface PurchaseLot {
   id: string
   item_id: string
+  cpa_number: string | null
   purchase_date: string
   vendor: string | null
   item_description: string | null
   qty_purchased: number
   unit_cost: number
+  /** Amount paid for the lot, including tax. Entered, not qty × unit cost. */
+  total_purchase_cost?: number | null
   asset_type: StockAssetType
   manufacturer: string | null
   model: string | null
@@ -43,7 +46,10 @@ export interface StockAllocation {
   id: string
   lot_id: string | null
   device_id: string | null
+  /** Original hand-out date — what the report shows. */
   assigned_date: string
+  /** Day the charge was entered — decides which report month it lands on. */
+  recorded_date?: string | null
   office: string
   quantity: number
   unit_cost: number | null
@@ -63,6 +69,7 @@ export interface LotWithMetrics extends PurchaseLot {
 
 export type ReportAllocationRow = StockAllocation & {
   item_id: string
+  cpa_number?: string | null
   serial_number?: string | null
   user_name?: string | null
   purchase_date?: string | null
@@ -73,7 +80,12 @@ export type ReportAllocationRow = StockAllocation & {
 export interface MonthEndGroup {
   key: string
   assigned_date: string
+  /** YYYY-MM of the report the group lands on. */
+  report_month: string
+  /** Assigned in an earlier month than the report it lands on. */
+  recorded_late: boolean
   item_id: string
+  cpa_number: string | null
   office: string
   quantity: number
   unit_cost: number | null
@@ -162,21 +174,59 @@ export function formatUsd(value: unknown): string {
   )
 }
 
+/** Entered lot total, or qty × unit cost when a lot was saved before that field existed. */
+export function resolveTotalPurchaseCost(lot: {
+  qty_purchased: number
+  unit_cost: number
+  total_purchase_cost?: number | null
+}): number {
+  if (lot.total_purchase_cost != null && Number.isFinite(Number(lot.total_purchase_cost))) {
+    return roundMoney(lot.total_purchase_cost)
+  }
+  return roundMoney(lot.qty_purchased * moneyNumber(lot.unit_cost))
+}
+
+/** Per-unit amount charged to an office: an equal share of the tax-inclusive total. */
+export function chargedUnitCost(lot: {
+  qty_purchased: number
+  unit_cost: number
+  total_purchase_cost?: number | null
+}): number {
+  const total = resolveTotalPurchaseCost(lot)
+  if (lot.qty_purchased <= 0) return roundMoney(moneyNumber(lot.unit_cost))
+  return roundMoney(total / lot.qty_purchased)
+}
+
+export function parseTotalPurchaseCost(
+  value: unknown
+): { ok: true; total: number } | { ok: false; error: string } {
+  if (value == null || String(value).trim() === '') {
+    return { ok: false, error: 'Total purchase cost is required' }
+  }
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) {
+    return { ok: false, error: 'Total purchase cost cannot be negative' }
+  }
+  return { ok: true, total: roundMoney(n) }
+}
+
 export function computeLotMetrics(
   qtyPurchased: number,
-  unitCost: number,
+  totalPurchaseCost: number,
   qtyAssigned: number
 ): {
   total_purchase_cost: number
   qty_in_stock: number
   stock_value: number
 } {
-  const assigned = Math.max(0, qtyAssigned)
+  const assigned = Math.min(Math.max(0, qtyAssigned), Math.max(0, qtyPurchased))
   const inStock = qtyPurchased - assigned
+  const total = roundMoney(totalPurchaseCost)
+  const unit = qtyPurchased > 0 ? roundMoney(total / qtyPurchased) : 0
   return {
-    total_purchase_cost: roundMoney(qtyPurchased * unitCost),
+    total_purchase_cost: total,
     qty_in_stock: inStock,
-    stock_value: roundMoney(inStock * unitCost),
+    stock_value: inStock <= 0 ? 0 : roundMoney(total - unit * assigned),
   }
 }
 
@@ -273,7 +323,7 @@ export function assertLotMakeModel(
   return { ok: true, manufacturer: mfr, model: mod }
 }
 
-/** Dropdown label: item id, purchase date, make/model, remaining qty, unit cost. */
+/** Dropdown label: invoice #, purchase date, make/model, remaining qty, unit cost. */
 export function formatLotOptionLabel(lot: {
   item_id: string
   purchase_date?: string | null
@@ -446,19 +496,27 @@ export function yearsFromMonthKeys(monthKeys: string[]): number[] {
   return [...years].sort((a, b) => b - a)
 }
 
+export function allocationReportDate(row: Pick<StockAllocation, 'assigned_date' | 'recorded_date'>): string {
+  return row.recorded_date || row.assigned_date
+}
+
 export function groupMonthEndRows(rows: ReportAllocationRow[]): MonthEndGroup[] {
   const map = new Map<string, MonthEndGroup>()
   for (const row of rows) {
     const itemId = row.item_id || 'Unmatched'
     const office = row.office || UNSPECIFIED_OFFICE
     const lotKey = row.lot_id || 'unmatched'
-    const key = `${row.assigned_date}|${lotKey}|${office}`
+    const reportMonth = monthKeyFromYmd(allocationReportDate(row))
+    const key = `${reportMonth}|${row.assigned_date}|${lotKey}|${office}`
     let group = map.get(key)
     if (!group) {
       group = {
         key,
         assigned_date: row.assigned_date,
+        report_month: reportMonth,
+        recorded_late: monthKeyFromYmd(row.assigned_date) < reportMonth,
         item_id: itemId,
+        cpa_number: row.cpa_number || null,
         office,
         quantity: 0,
         unit_cost: row.unit_cost,
@@ -479,6 +537,8 @@ export function groupMonthEndRows(rows: ReportAllocationRow[]): MonthEndGroup[] 
     group.rows.push(row)
   }
   return [...map.values()].sort((a, b) => {
+    const monthCmp = a.report_month.localeCompare(b.report_month)
+    if (monthCmp !== 0) return monthCmp
     const dateCmp = a.assigned_date.localeCompare(b.assigned_date)
     if (dateCmp !== 0) return dateCmp
     const lotDateCmp = (a.purchase_date || '').localeCompare(b.purchase_date || '')
@@ -636,8 +696,10 @@ export function monthEndCsv(
   const includeMonth = Boolean(opts?.includeMonthColumn)
   const header = [
     ...(includeMonth ? ['Month'] : []),
+    'CPA #',
     'Date assigned',
-    'Item ID',
+    'Invoice #',
+    'Make / Model',
     'Lot purchased',
     'Office',
     'Quantity',
@@ -648,9 +710,11 @@ export function monthEndCsv(
   for (const g of groups) {
     lines.push(
       [
-        ...(includeMonth ? [csvEscape(monthKeyFromYmd(g.assigned_date))] : []),
+        ...(includeMonth ? [csvEscape(g.report_month)] : []),
+        csvEscape(g.cpa_number || ''),
         csvEscape(g.assigned_date),
         csvEscape(g.item_id),
+        csvEscape(formatMakeModel(g.manufacturer, g.model)),
         csvEscape(g.purchase_date || ''),
         csvEscape(g.office),
         csvEscape(g.quantity),

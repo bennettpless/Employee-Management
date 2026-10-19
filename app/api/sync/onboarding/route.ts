@@ -30,6 +30,9 @@ const MAX_BATCH = 25
 // (A single known name isn't enough — an unfinished column or a re-listed
 // employee shouldn't hide newer hires sitting behind it.)
 const STOP_AFTER_KNOWN = 3
+// An offboarding entry older than this whose Entra account is still enabled
+// is treated as stale (rehire / name collision) and not removed.
+const STALE_OFFBOARD_DAYS = 30
 
 /**
  * Both sheets are transposed: column A holds field labels, and each
@@ -809,6 +812,18 @@ export async function POST(_request: NextRequest) {
     const termDateRow = findRow(offGrid, 'Termination date')
     if (!offNameRow) throw new Error(`Offboarding sheet has no "Employee Name" row`)
 
+    let enabledEntraEmails: Set<string> | null = null
+    try {
+      enabledEntraEmails = new Set(
+        (await listAzureDirectoryUsers()).map(azureUserEmailKey).filter(Boolean)
+      )
+    } catch (e: any) {
+      errors.push(`Offboarding: Entra lookup failed, stale-entry check skipped: ${e?.message || e}`)
+    }
+    const staleCutoff = new Date(Date.now() - STALE_OFFBOARD_DAYS * 86400 * 1000)
+      .toISOString()
+      .slice(0, 10)
+
     const offCols: number[] = []
     const offColCount = Math.max(offNameRow.length, termDateRow?.length ?? 0)
     let offKnownStreak = 0
@@ -816,6 +831,23 @@ export async function POST(_request: NextRequest) {
       const name = cellText(offNameRow, col)
       if (!name) continue
       const employeeId = matchEmployee(name)
+      const termIso = termDateRow ? excelValueToIsoDate(termDateRow[col]) : null
+      const email = employeeId
+        ? String(employeeById.get(employeeId)?.email || '').toLowerCase()
+        : ''
+      if (
+        employeeId &&
+        enabledEntraEmails?.has(email) &&
+        termIso &&
+        termIso < staleCutoff
+      ) {
+        errors.push(
+          `Offboarding: skipped ${name} (terminated ${termIso}) — ${email} is still enabled in Entra. Remove the stale sheet entry or disable the account.`
+        )
+        offKnownStreak++
+        if (offKnownStreak >= STOP_AFTER_KNOWN) break
+        continue
+      }
       // Already deleted from a previous sync → done. Still-present rows
       // (including legacy "terminated") are processed so they get removed.
       if (!employeeId) {
